@@ -1,0 +1,982 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dheemahi Ayur — Portfolio Dashboard</title>
+    <style>
+        :root {
+            --primary: #2c3e50;
+            --accent: #3498db;
+            --success: #2ecc71;
+            --warning: #e67e22;
+            --danger: #e74c3c;
+            --bg: #f8f9fa;
+            --card-bg: #ffffff;
+            --text: #333333;
+            --border: #e1e8ed;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: var(--bg);
+            color: var(--text);
+            margin: 0;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+
+        h1 {
+            font-size: 24px;
+            color: var(--primary);
+            margin: 0;
+        }
+
+        /* Tab Navigation Bar */
+        .tab-nav {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 20px;
+            border-bottom: 2px solid var(--border);
+            padding-bottom: 10px;
+            overflow-x: auto;
+        }
+
+        .tab-btn {
+            background: #e4e7eb;
+            border: none;
+            padding: 10px 20px;
+            font-size: 14px;
+            font-weight: 600;
+            color: #555;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .tab-btn:hover {
+            background: #cbd5e1;
+        }
+
+        .tab-btn.active {
+            background: var(--accent);
+            color: white;
+        }
+
+        /* Filters & Controls */
+        .controls-bar {
+            display: flex;
+            gap: 15px;
+            background: var(--card-bg);
+            padding: 15px;
+            border-radius: 8px;
+            border: 1px solid var(--border);
+            margin-bottom: 25px;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+
+        .control-group {
+            display: flex;
+            flex-direction: column;
+            flex: 1;
+            min-width: 200px;
+        }
+
+        .control-group label {
+            font-size: 11px;
+            font-weight: bold;
+            color: #7f8c8d;
+            margin-bottom: 5px;
+            text-transform: uppercase;
+        }
+
+        select, input {
+            padding: 8px 12px;
+            border: 1px solid var(--border);
+            border-radius: 4px;
+            font-size: 14px;
+            outline: none;
+            background: #fff;
+            transition: border-color 0.2s ease;
+        }
+
+        select:focus, input:focus {
+            border-color: var(--accent);
+        }
+
+        /* Section Layout Wrappers */
+        .dashboard-section {
+            background: var(--card-bg);
+            padding: 20px;
+            border-radius: 8px;
+            border: 1px solid var(--border);
+            margin-bottom: 25px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.02);
+        }
+
+        .section-header {
+            font-size: 16px;
+            font-weight: bold;
+            color: var(--primary);
+            margin-bottom: 5px;
+            border-bottom: 2px solid var(--border);
+            padding-bottom: 8px;
+        }
+
+        .section-sub {
+            font-size: 12px;
+            color: #7f8c8d;
+            margin-bottom: 15px;
+        }
+
+        .grid-cards {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: 15px;
+        }
+
+        .metric-card {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 6px;
+            border-left: 4px solid var(--accent);
+            cursor: pointer;
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+        }
+
+        .metric-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 10px rgba(0,0,0,0.05);
+            background: #f1f5f9;
+        }
+
+        .metric-card.warning { border-left-color: var(--warning); }
+        .metric-card.danger { border-left-color: var(--danger); }
+        .metric-card.success { border-left-color: var(--success); }
+
+        /* Drill-down Drawer / List Box */
+        .drilldown-panel {
+            background: #fff;
+            border: 1px solid var(--accent);
+            border-radius: 6px;
+            padding: 15px;
+            margin-top: 15px;
+            display: none;
+            animation: fadeInSlide 0.2s ease-out forwards;
+        }
+
+        @keyframes fadeInSlide {
+            from { opacity: 0; transform: translateY(-4px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        /* Analytics Section & Grid */
+        .analytics-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+        }
+
+        @media (max-width: 900px) {
+            .analytics-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .panel {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 6px;
+            border: 1px solid var(--border);
+        }
+
+        .cat-bar {
+            width: 0%;
+            background: #3498db;
+            height: 100%;
+            transition: width 0.8s cubic-bezier(0.1, 0.9, 0.2, 1);
+        }
+
+        .daily-bar {
+            height: 0%;
+            background: #3498db;
+            width: 100%;
+            max-width: 28px;
+            border-radius: 4px 4px 0 0;
+            min-height: 4px;
+            transition: height 0.8s cubic-bezier(0.1, 0.9, 0.2, 1);
+        }
+
+        .chart-container {
+            height: 180px;
+            display: flex;
+            align-items: flex-end;
+            gap: 8px;
+            padding-top: 15px;
+        }
+
+        /* Tables & Row Highlighting */
+        .table-responsive {
+            background: var(--card-bg);
+            border-radius: 8px;
+            border: 1px solid var(--border);
+            overflow: hidden;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            text-align: left;
+            font-size: 14px;
+        }
+
+        th {
+            background: #f4f6f8;
+            padding: 12px 15px;
+            font-weight: 600;
+            color: var(--primary);
+            border-bottom: 1px solid var(--border);
+        }
+
+        td {
+            padding: 12px 15px;
+            border-bottom: 1px solid var(--border);
+            color: var(--text);
+        }
+
+        tbody tr { transition: background-color 0.15s ease; }
+        tbody tr:hover { background-color: #f1f5f9; }
+        tr:last-child td { border-bottom: none; }
+
+        tr.row-overdue {
+            background-color: #fdf2f2 !important;
+            border-left: 4px solid var(--danger);
+        }
+
+        tr.row-warning {
+            background-color: #fef9e7 !important;
+            border-left: 4px solid var(--warning);
+        }
+
+        .badge {
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 11px;
+            font-weight: bold;
+            text-transform: uppercase;
+        }
+
+        .badge-completed { background: #e8f8f5; color: var(--success); }
+        .badge-inprogress { background: #fef9e7; color: var(--warning); }
+        .badge-notstarted { background: #fdedec; color: var(--danger); }
+
+        .sync-badge { font-size: 12px; font-weight: normal; color: var(--success); }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <header>
+        <div>
+            <h1>Dheemahi Ayur — Portfolio Dashboard</h1>
+            <span id="syncStatus" class="sync-badge">(Syncing sheets...)</span>
+        </div>
+        <button onclick="resetFilters()" style="padding: 8px 15px; background: #fff; border: 1px solid var(--border); border-radius: 4px; cursor: pointer; font-weight: 600; transition: background 0.2s;" onmouseover="this.style.background='#f1f5f9'" onmouseout="this.style.background='#fff'">Reset Filters</button>
+    </header>
+
+    <!-- Tab Navigation Bar -->
+    <div class="tab-nav" id="tabNavContainer">
+        <button onclick="switchTab('SUMMARY')" id="tab_SUMMARY" class="tab-btn active">📊 Combined Executive Dashboard</button>
+    </div>
+
+    <!-- Filters Bar -->
+    <div class="controls-bar" id="filtersBarSection">
+        <div class="control-group">
+            <label for="statusFilter">Status Filter</label>
+            <select id="statusFilter" onchange="render()">
+                <option value="ALL">All Statuses</option>
+                <option value="Completed">Completed</option>
+                <option value="In-Progress">In-Progress</option>
+                <option value="Not Started">Not Started</option>
+            </select>
+        </div>
+        <div class="control-group" id="categoryFilterGroup">
+            <label for="categoryFilter">Category Filter</label>
+            <select id="categoryFilter" onchange="render()">
+                <option value="ALL">All Categories</option>
+                <option value="On-Page SEO">On-Page SEO</option>
+                <option value="Directory Submissions">Directory Submissions</option>
+                <option value="Social Media / Reel">Social Media / Reel</option>
+                <option value="Management & Meetings">Management & Meetings</option>
+                <option value="Security & Audit">Security & Audit</option>
+                <option value="Other">Other</option>
+            </select>
+        </div>
+        <div class="control-group" style="flex: 2;">
+            <label for="searchInput">Search Keyword</label>
+            <input type="text" id="searchInput" placeholder="Search tasks..." oninput="render()">
+        </div>
+    </div>
+
+    <!-- MAIN CONTAINER -->
+    <div id="mainDashboardContent"></div>
+
+    <!-- Table Details Section -->
+    <div class="panel" style="padding: 0; overflow: hidden; background: var(--card-bg); border: 1px solid var(--border);">
+        <div style="padding: 15px 20px; border-bottom: 1px solid var(--border);">
+            <div class="section-header" id="tableSectionTitle" style="margin: 0; border: none; padding: 0;">Team Roll-up Summary (By Resource)</div>
+        </div>
+        <div class="table-responsive">
+            <table>
+                <thead>
+                    <tr id="tableHeaderRow">
+                        <th>Resource Name</th>
+                        <th>Total Tasks</th>
+                        <th>Completed Tasks</th>
+                        <th>Total Workload</th>
+                        <th>Action</th>
+                    </tr>
+                </thead>
+                <tbody id="tableBody">
+                    <tr><td colspan="5" style="text-align:center; padding:30px; color:#95a5a6;">Loading data...</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<script>
+    const sheetsToFetch = [
+        { name: 'Anjana', sheetId: '1w5vywPUV-W-y1P3egSx6xgfHzxi5pjGxP_OyU8rNHJw', gid: '927371423' },
+        { name: 'Rumaisa', sheetId: '1thS7nWA0J-6CXKtONMpcusVoCqNof_spq_ZFocINXY4', gid: '927371423' }
+    ];
+
+    let rawData = [];
+    let completedFetches = 0;
+    let currentTab = 'SUMMARY';
+
+    function categorize(task) {
+        const t = String(task).toLowerCase();
+        if (['seo', 'serp', 'meta', 'h1', 'alt', 'noindex', 'link', 'image'].some(k => t.includes(k))) return 'On-Page SEO';
+        if (t.includes('directory') || t.includes('directories')) return 'Directory Submissions';
+        if (t.includes('reel')) return 'Social Media / Reel';
+        if (t.includes('meeting')) return 'Management & Meetings';
+        if (t.includes('spam') || t.includes('security')) return 'Security & Audit';
+        return 'Other';
+    }
+
+    function formatChartDate(rawDate) {
+        if (!rawDate) return '';
+        return rawDate.replace(/[-/]?202[0-9]/g, '').trim();
+    }
+
+    function parseDateObj(dateStr) {
+        if (!dateStr) return null;
+        let parts = dateStr.split('-');
+        if (parts.length === 3) {
+            let months = {'Jan':0,'Feb':1,'Mar':2,'Apr':3,'May':4,'Jun':5,'Jul':6,'Aug':7,'Sep':8,'Oct':9,'Nov':10,'Dec':11};
+            let d = parseInt(parts[0]);
+            let m = months[parts[1]];
+            let y = parseInt(parts[2]);
+            if (!isNaN(d) && m !== undefined && !isNaN(y)) {
+                return new Date(y, m, d);
+            }
+        }
+        return null;
+    }
+
+    function loadGoogleSheetsJSONP() {
+        rawData = [];
+        completedFetches = 0;
+        document.getElementById('syncStatus').innerText = '(Syncing sheets...)';
+        document.getElementById('syncStatus').style.color = '#3498db';
+
+        sheetsToFetch.forEach((sheet, index) => {
+            const callbackName = `gviz_callback_${index}_${Date.now()}`;
+            window[callbackName] = function(response) {
+                processSingleSheetResponse(response, sheet.name);
+                delete window[callbackName];
+            };
+
+            const script = document.createElement('script');
+            script.src = `https://docs.google.com/spreadsheets/d/${sheet.sheetId}/gviz/tq?gid=${sheet.gid}&tqx=responseHandler:${callbackName}`;
+            script.onerror = function() {
+                completedFetches++;
+                checkAllComplete();
+            };
+            document.body.appendChild(script);
+        });
+    }
+
+    function processSingleSheetResponse(response, sourceName) {
+        if (response && response.status !== 'error' && response.table) {
+            const table = response.table;
+            const rows = table.rows;
+            let colMap = { date: 0, task: 1, project: 2, est: 3, act: 4, status: 8 };
+
+            table.cols.forEach((col, idx) => {
+                let label = (col.label || '').toUpperCase();
+                if (label.includes('DATE')) colMap.date = idx;
+                if (label.includes('TASK')) colMap.task = idx;
+                if (label.includes('PROJECT')) colMap.project = idx;
+                if (label.includes('ESTIMATED')) colMap.est = idx;
+                if (label.includes('ACTUAL')) colMap.act = idx;
+                if (label.includes('STATUS')) colMap.status = idx;
+            });
+
+            rows.forEach(r => {
+                let c = r.c;
+                if (!c) return;
+
+                let task = (c[colMap.task] && c[colMap.task].v) ? String(c[colMap.task].v) : '';
+                if (!task || task.toLowerCase() === 'sunday') return;
+
+                let dateStr = '';
+                if (c[colMap.date]) {
+                    dateStr = c[colMap.date].f || c[colMap.date].v || '';
+                    if (String(dateStr).includes('Date(')) {
+                        let parts = String(dateStr).match(/\d+/g);
+                        if (parts && parts.length >= 3) {
+                            let months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+                            let d = String(parts[2]).padStart(2, '0');
+                            let m = months[parseInt(parts[1])];
+                            let y = parts[0];
+                            dateStr = `${d}-${m}-${y}`;
+                        }
+                    }
+                }
+
+                let estVal = c[colMap.est] ? parseFloat(c[colMap.est].v) || 0 : 0;
+                let actVal = c[colMap.act] ? parseFloat(c[colMap.act].v) || 0 : 0;
+                let statusVal = c[colMap.status] && c[colMap.status].v ? String(c[colMap.status].v) : 'Not Started';
+
+                rawData.push({
+                    SOURCE_SHEET: sourceName,
+                    DATE_STR: String(dateStr),
+                    TASK: task,
+                    PROJECT: c[colMap.project] && c[colMap.project].v ? String(c[colMap.project].v) : 'Dheemahi Ayur',
+                    Category: categorize(task),
+                    'ESTIMATED HOURS': estVal,
+                    'ACTUAL HOURS': actVal,
+                    STATUS: statusVal
+                });
+            });
+        }
+        completedFetches++;
+        checkAllComplete();
+    }
+
+    function checkAllComplete() {
+        if (completedFetches >= sheetsToFetch.length) {
+            document.getElementById('syncStatus').innerText = `✓ Synced ${sheetsToFetch.length} Sheets`;
+            document.getElementById('syncStatus').style.color = '#2ecc71';
+            buildTabs();
+            render();
+        }
+    }
+
+    function buildTabs() {
+        const navContainer = document.getElementById('tabNavContainer');
+        let html = `<button onclick="switchTab('SUMMARY')" id="tab_SUMMARY" class="tab-btn ${currentTab === 'SUMMARY' ? 'active' : ''}">📊 Combined Executive Dashboard</button>`;
+        sheetsToFetch.forEach(s => {
+            html += `<button onclick="switchTab('${s.name}')" id="tab_${s.name}" class="tab-btn ${currentTab === s.name ? 'active' : ''}">👤 ${s.name}</button>`;
+        });
+        navContainer.innerHTML = html;
+    }
+
+    function switchTab(tabName) {
+        currentTab = tabName;
+        document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+        const activeBtn = document.getElementById(`tab_${tabName}`);
+        if (activeBtn) activeBtn.classList.add('active');
+        render();
+    }
+
+    function render() {
+        const statusFilter = document.getElementById('statusFilter').value;
+        const categoryFilter = document.getElementById('categoryFilter').value;
+        const searchVal = document.getElementById('searchInput').value.toLowerCase();
+
+        const tabFiltered = rawData.filter(d => currentTab === 'SUMMARY' || d.SOURCE_SHEET === currentTab);
+
+        const filtered = tabFiltered.filter(d => {
+            const matchStatus = statusFilter === 'ALL' || d.STATUS === statusFilter;
+            const matchCat = categoryFilter === 'ALL' || d.Category === categoryFilter;
+            const matchSearch = d.TASK.toLowerCase().includes(searchVal);
+            return matchStatus && matchCat && matchSearch;
+        });
+
+        if (currentTab === 'SUMMARY') {
+            renderCombinedDashboard(tabFiltered, filtered);
+        } else {
+            renderIndividualDashboard(filtered);
+        }
+    }
+
+    function toggleExclusiveDrilldown(sectionPrefix, clickedId) {
+        // Find all panels belonging to this section prefix and hide them except the clicked one
+        document.querySelectorAll(`[id^="drill_${sectionPrefix}_"]`).forEach(el => {
+            if (el.id !== clickedId) {
+                el.style.display = 'none';
+            }
+        });
+        const target = document.getElementById(clickedId);
+        if (target) {
+            target.style.display = target.style.display === 'block' ? 'none' : 'block';
+        }
+    }
+
+    function renderCombinedDashboard(tabFiltered, filtered) {
+        const totalTasks = tabFiltered.length;
+        const completedTasks = tabFiltered.filter(d => d.STATUS === 'Completed').length;
+        const overallPct = totalTasks ? ((completedTasks / totalTasks) * 100).toFixed(1) : 0;
+        const totalHours = tabFiltered.reduce((sum, d) => sum + d['ESTIMATED HOURS'], 0);
+        const completedHours = tabFiltered.filter(d => d.STATUS === 'Completed').reduce((sum, d) => sum + d['ESTIMATED HOURS'], 0);
+        const remainingCapacity = totalHours - completedHours;
+
+        let today = new Date();
+        today.setHours(0,0,0,0);
+        let nextWeek = new Date();
+        nextWeek.setDate(today.getDate() + 7);
+
+        let overdueTasksList = [];
+        let dueThisWeekList = [];
+
+        tabFiltered.forEach(d => {
+            let taskDate = parseDateObj(d.DATE_STR);
+            if (taskDate) {
+                taskDate.setHours(0,0,0,0);
+                if (d.STATUS !== 'Completed' && taskDate < today) {
+                    overdueTasksList.push(d);
+                }
+                if (d.STATUS !== 'Completed' && taskDate >= today && taskDate <= nextWeek) {
+                    dueThisWeekList.push(d);
+                }
+            }
+        });
+
+        let overloadedResourcesMap = {};
+        sheetsToFetch.forEach(s => {
+            let resData = rawData.filter(d => d.SOURCE_SHEET === s.name);
+            let dateMap = {};
+            resData.forEach(d => { dateMap[d.DATE_STR] = (dateMap[d.DATE_STR] || 0) + d['ESTIMATED HOURS']; });
+            for (let dt in dateMap) {
+                if (dateMap[dt] > 7) {
+                    if (!overloadedResourcesMap[s.name]) overloadedResourcesMap[s.name] = [];
+                    overloadedResourcesMap[s.name].push(`${dt} (${dateMap[dt].toFixed(1)} hrs)`);
+                }
+            }
+        });
+
+        let activeResourcesList = sheetsToFetch.map(s => s.name);
+        let overloadedNames = Object.keys(overloadedResourcesMap);
+        let balancedNames = activeResourcesList.filter(name => !overloadedResourcesMap[name]);
+
+        let projectProgressHTML = '';
+        sheetsToFetch.forEach(s => {
+            let resTasks = rawData.filter(d => d.SOURCE_SHEET === s.name);
+            let resComp = resTasks.filter(d => d.STATUS === 'Completed').length;
+            let resPct = resTasks.length > 0 ? ((resComp / resTasks.length) * 100).toFixed(1) : 0;
+            projectProgressHTML += `
+                <div style="margin-bottom: 8px;">
+                    <div style="display: flex; justify-content: space-between; font-size: 12px; margin-bottom: 3px; font-weight: bold; color: #34495e;">
+                        <span>👤 ${s.name}</span>
+                        <span>${resPct}% (${resComp}/${resTasks.length} tasks)</span>
+                    </div>
+                    <div style="background: #ecf0f1; border-radius: 4px; height: 14px; overflow: hidden;">
+                        <div style="background: var(--success); width: ${resPct}%; height: 100%; transition: width 0.5s ease;"></div>
+                    </div>
+                </div>`;
+        });
+
+        document.getElementById('mainDashboardContent').innerHTML = `
+            <!-- 1. PROJECT STATUS SECTION -->
+            <div class="dashboard-section">
+                <div class="section-header">Project Status</div>
+                <div class="section-sub">Click metric cards below to view interactive progress graphs and task lists</div>
+                <div class="grid-cards">
+                    <div class="metric-card success" onclick="toggleExclusiveDrilldown('proj', 'drill_proj_progressGraph')">
+                        <div style="font-size: 11px; font-weight: bold; color: #7f8c8d; text-transform: uppercase;">Overall Progress % 🔍</div>
+                        <div style="font-size: 24px; font-weight: bold; color: var(--primary); margin: 4px 0;">${overallPct}%</div>
+                        <div style="font-size: 12px; color: #555;">Click to view progress graph</div>
+                    </div>
+                    <div class="metric-card ${overdueTasksList.length > 0 ? 'danger' : 'success'}" onclick="toggleExclusiveDrilldown('proj', 'drill_proj_overdue')">
+                        <div style="font-size: 11px; font-weight: bold; color: #7f8c8d; text-transform: uppercase;">Overdue Tasks 🔍</div>
+                        <div style="font-size: 24px; font-weight: bold; color: var(--primary); margin: 4px 0;">${overdueTasksList.length} Tasks</div>
+                        <div style="font-size: 12px; color: #555;">Click to view overdue list (Project Basis)</div>
+                    </div>
+                    <div class="metric-card" onclick="toggleExclusiveDrilldown('proj', 'drill_proj_dueWeek')">
+                        <div style="font-size: 11px; font-weight: bold; color: #7f8c8d; text-transform: uppercase;">Tasks Due This Week 🔍</div>
+                        <div style="font-size: 24px; font-weight: bold; color: var(--primary); margin: 4px 0;">${dueThisWeekList.length} Tasks</div>
+                        <div style="font-size: 12px; color: #555;">Click to view weekly schedule</div>
+                    </div>
+                </div>
+
+                <!-- Drill-down Panels (Project Status) -->
+                <div id="drill_proj_progressGraph" class="drilldown-panel">
+                    <div style="font-weight: bold; color: var(--primary); margin-bottom: 10px;">📊 Project Progress Breakdown (By Resource):</div>
+                    ${projectProgressHTML}
+                </div>
+                <div id="drill_proj_overdue" class="drilldown-panel">
+                    <div style="font-weight: bold; color: var(--danger); margin-bottom: 8px;">⚠️ Detailed List of Overdue Tasks (Project Basis):</div>
+                    ${overdueTasksList.length > 0 ? overdueTasksList.map(t => `<div style="padding: 6px 0; border-bottom: 1px solid var(--border); font-size: 13px;"><b>[${t.SOURCE_SHEET}]</b> ${t.TASK} — Due: ${t.DATE_STR}</div>`).join('') : '<div style="font-size:13px; color:#555;">No overdue tasks found.</div>'}
+                </div>
+                <div id="drill_proj_dueWeek" class="drilldown-panel">
+                    <div style="font-weight: bold; color: var(--accent); margin-bottom: 8px;">📅 Tasks Due This Week:</div>
+                    ${dueThisWeekList.length > 0 ? dueThisWeekList.map(t => `<div style="padding: 6px 0; border-bottom: 1px solid var(--border); font-size: 13px;"><b>[${t.SOURCE_SHEET}]</b> ${t.TASK} — Due: ${t.DATE_STR} (${t['ESTIMATED HOURS']} hrs)</div>`).join('') : '<div style="font-size:13px; color:#555;">No tasks due this week.</div>'}
+                </div>
+            </div>
+
+            <!-- 2. RESOURCE SUMMARY SECTION -->
+            <div class="dashboard-section">
+                <div class="section-header">Resource Summary</div>
+                <div class="section-sub">Click metric cards below to view active resources, status breakdowns, and capacity details</div>
+                <div class="grid-cards">
+                    <div class="metric-card success" onclick="toggleExclusiveDrilldown('res', 'drill_res_activeRes')">
+                        <div style="font-size: 11px; font-weight: bold; color: #7f8c8d; text-transform: uppercase;">Resource Utilization 🔍</div>
+                        <div style="font-size: 24px; font-weight: bold; color: var(--primary); margin: 4px 0;">${activeResourcesList.length} Active</div>
+                        <div style="font-size: 12px; color: #555;">Click to view active resources</div>
+                    </div>
+                    <div class="metric-card success" onclick="toggleExclusiveDrilldown('res', 'drill_res_resStatus')">
+                        <div style="font-size: 11px; font-weight: bold; color: #7f8c8d; text-transform: uppercase;">Resource Status 🔍</div>
+                        <div style="font-size: 24px; font-weight: bold; color: var(--primary); margin: 4px 0;">${balancedNames.length} Balanced</div>
+                        <div style="font-size: 12px; color: #555;">Click to view status list</div>
+                    </div>
+                    <div class="metric-card" onclick="toggleExclusiveDrilldown('res', 'drill_res_remainingCap')">
+                        <div style="font-size: 11px; font-weight: bold; color: #7f8c8d; text-transform: uppercase;">Remaining Capacity 🔍</div>
+                        <div style="font-size: 24px; font-weight: bold; color: var(--danger); margin: 4px 0;">${remainingCapacity.toFixed(1)} hrs</div>
+                        <div style="font-size: 12px; color: #555;">Click to view separated list</div>
+                    </div>
+                    <div class="metric-card ${overloadedNames.length > 0 ? 'warning' : 'success'}" onclick="toggleExclusiveDrilldown('res', 'drill_res_overloadedRes')">
+                        <div style="font-size: 11px; font-weight: bold; color: #7f8c8d; text-transform: uppercase;">Overloaded Resources 🔍</div>
+                        <div style="font-size: 24px; font-weight: bold; color: var(--primary); margin: 4px 0;">${overloadedNames.length} Resource(s)</div>
+                        <div style="font-size: 12px; color: #555;">Click to view overloaded list</div>
+                    </div>
+                </div>
+
+                <!-- Drill-down Panels (Resource Summary) -->
+                <div id="drill_res_activeRes" class="drilldown-panel">
+                    <div style="font-weight: bold; color: var(--primary); margin-bottom: 8px;">👤 Active Resources List:</div>
+                    ${activeResourcesList.map(name => `<div style="padding: 6px 0; border-bottom: 1px solid var(--border); font-size: 13px;">• <b>${name}</b> (Portfolio Synced & Operational)</div>`).join('')}
+                </div>
+                <div id="drill_res_resStatus" class="drilldown-panel">
+                    <div style="font-weight: bold; color: var(--success); margin-bottom: 8px;">🟢 Resource Status Breakdown:</div>
+                    ${activeResourcesList.map(name => {
+                        let isOver = overloadedResourcesMap[name];
+                        return `<div style="padding: 6px 0; border-bottom: 1px solid var(--border); font-size: 13px;">• <b>${name}</b>: ${isOver ? '<span style="color:var(--warning); font-weight:bold;">Overloaded</span>' : '<span style="color:var(--success); font-weight:bold;">Balanced</span>'}</div>`;
+                    }).join('')}
+                </div>
+                <div id="drill_res_remainingCap" class="drilldown-panel">
+                    <div style="font-weight: bold; color: var(--accent); margin-bottom: 8px;">⏳ Remaining Capacity Breakdown by Resource:</div>
+                    ${sheetsToFetch.map(s => {
+                        let resTasks = rawData.filter(d => d.SOURCE_SHEET === s.name);
+                        let resHrs = resTasks.reduce((sum, d) => sum + d['ESTIMATED HOURS'], 0);
+                        let resCompHrs = resTasks.filter(d => d.STATUS === 'Completed').reduce((sum, d) => sum + d['ESTIMATED HOURS'], 0);
+                        let resRem = resHrs - resCompHrs;
+                        return `<div style="padding: 8px 0; border-bottom: 1px solid var(--border); font-size: 13px;">• <b>${s.name}</b>: <b>${resRem.toFixed(1)} hrs remaining</b> (Completed: ${resCompHrs.toFixed(1)} hrs / Total: ${resHrs.toFixed(1)} hrs)</div>`;
+                    }).join('')}
+                </div>
+                <div id="drill_res_overloadedRes" class="drilldown-panel">
+                    <div style="font-weight: bold; color: var(--warning); margin-bottom: 8px;">⚠️ Overloaded Resources List (>7 hrs/day):</div>
+                    ${overloadedNames.length > 0 ? overloadedNames.map(name => `<div style="padding: 6px 0; border-bottom: 1px solid var(--border); font-size: 13px;">• <b>${name}</b> overloaded on: ${overloadedResourcesMap[name].join(', ')}</div>`).join('') : '<div style="font-size:13px; color:#555;">No overloaded resources. All daily workloads are ≤ 7 hours.</div>'}
+                </div>
+            </div>
+
+            <!-- 3. PROJECT INSIGHTS SECTION -->
+            <div class="dashboard-section">
+                <div class="section-header">Project Insights</div>
+                <div class="section-sub">Category-wise breakdown, daily workload distribution, and milestones</div>
+                <div class="analytics-grid">
+                    <div class="panel">
+                        <div style="font-weight: bold; color: var(--primary); margin-bottom: 15px;">Category-wise Progress</div>
+                        <div id="combinedCategoryChart" style="display: flex; flex-direction: column; justify-content: center; min-height: 180px;"></div>
+                    </div>
+                    <div class="panel">
+                        <div style="font-weight: bold; color: var(--primary); margin-bottom: 15px;">Workload Distribution & Upcoming Milestones</div>
+                        <div id="combinedMilestonesContainer" style="font-size: 13px; color: #555; display: flex; flex-direction: column; gap: 10px; justify-content: center; min-height: 180px;"></div>
+                    </div>
+                </div>
+            </div>
+        `;
+
+        // Render Combined Category Chart
+        const catMap = {};
+        tabFiltered.forEach(d => { catMap[d.Category] = (catMap[d.Category] || 0) + d['ESTIMATED HOURS']; });
+        const maxCatHrs = Math.max(...Object.values(catMap), 1);
+        let catHTML = '';
+        for (let cat in catMap) {
+            let hrs = catMap[cat];
+            let pct = (hrs / maxCatHrs) * 100;
+            catHTML += `
+                <div style="margin-bottom: 8px;">
+                    <div style="display: flex; justify-content: space-between; font-size: 12px; margin-bottom: 3px; font-weight: bold; color: #34495e;">
+                        <span>${cat}</span>
+                        <span>${hrs.toFixed(1)} hrs</span>
+                    </div>
+                    <div style="background: #ecf0f1; border-radius: 4px; height: 14px; overflow: hidden;">
+                        <div class="cat-bar" data-width="${pct}"></div>
+                    </div>
+                </div>`;
+        }
+        document.getElementById('combinedCategoryChart').innerHTML = catHTML || '<div style="color:#95a5a6; text-align:center;">No Data</div>';
+
+        // Render Milestones insights
+        let upcomingTasks = tabFiltered.filter(d => d.STATUS !== 'Completed').slice(0, 3);
+        let milestoneHTML = '<div style="font-weight: bold; margin-bottom: 5px;">Upcoming Milestone Tasks:</div>';
+        upcomingTasks.forEach(t => {
+            milestoneHTML += `<div style="background: #fff; padding: 8px; border: 1px solid var(--border); border-radius: 4px;">• <b>${t.TASK}</b> (${t.SOURCE_SHEET}) — Due: ${t.DATE_STR}</div>`;
+        });
+        document.getElementById('combinedMilestonesContainer').innerHTML = milestoneHTML || '<div>No upcoming milestones pending</div>';
+
+        setTimeout(() => {
+            document.querySelectorAll('.cat-bar').forEach(bar => {
+                bar.style.width = bar.getAttribute('data-width') + '%';
+            });
+        }, 50);
+
+        document.getElementById('tableHeaderRow').innerHTML = `
+            <th>Resource Name</th>
+            <th>Total Tasks</th>
+            <th>Completed Tasks</th>
+            <th>Total Workload</th>
+            <th>Action</th>
+        `;
+
+        let summaryTableHTML = '';
+        sheetsToFetch.forEach(s => {
+            let resTasks = rawData.filter(d => d.SOURCE_SHEET === s.name);
+            let resComp = resTasks.filter(d => d.STATUS === 'Completed').length;
+            let resHrs = resTasks.reduce((sum, d) => sum + d['ESTIMATED HOURS'], 0);
+            summaryTableHTML += `
+                <tr>
+                    <td style="font-weight: 600;">👤 ${s.name}</td>
+                    <td>${resTasks.length}</td>
+                    <td>${resComp}</td>
+                    <td>${resHrs.toFixed(1)} hrs</td>
+                    <td><button onclick="switchTab('${s.name}')" style="padding: 4px 10px; background: var(--accent); color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 12px;">View Schedule</button></td>
+                </tr>`;
+        });
+        document.getElementById('tableBody').innerHTML = summaryTableHTML;
+    }
+
+    function renderIndividualDashboard(filtered) {
+        const totalTasks = filtered.length;
+        const completedTasks = filtered.filter(d => d.STATUS === 'Completed').length;
+        const totalHours = filtered.reduce((sum, d) => sum + d['ESTIMATED HOURS'], 0);
+        const completedHours = filtered.filter(d => d.STATUS === 'Completed').reduce((sum, d) => sum + d['ESTIMATED HOURS'], 0);
+        const remainingCapacity = totalHours - completedHours;
+        const resPct = totalHours > 0 ? ((completedHours / totalHours) * 100).toFixed(1) : 0;
+
+        let resDateMap = {};
+        let allResTasks = rawData.filter(d => d.SOURCE_SHEET === currentTab);
+        allResTasks.forEach(d => { resDateMap[d.DATE_STR] = (resDateMap[d.DATE_STR] || 0) + d['ESTIMATED HOURS']; });
+        
+        let overloadedDates = new Set();
+        for (let dt in resDateMap) {
+            if (resDateMap[dt] > 7) overloadedDates.add(dt);
+        }
+
+        let today = new Date();
+        today.setHours(0,0,0,0);
+        let resOverdueTasks = [];
+        filtered.forEach(d => {
+            if (d.STATUS !== 'Completed') {
+                let taskDate = parseDateObj(d.DATE_STR);
+                if (taskDate) {
+                    taskDate.setHours(0,0,0,0);
+                    if (taskDate < today) resOverdueTasks.push(d);
+                }
+            }
+        });
+
+        document.getElementById('mainDashboardContent').innerHTML = `
+            <!-- 1. PROJECT STATUS SECTION -->
+            <div class="dashboard-section">
+                <div class="section-header">${currentTab}'s Project Status</div>
+                <div class="section-sub">Progress tracking and timeline health for ${currentTab}</div>
+                <div class="grid-cards">
+                    <div class="metric-card success">
+                        <div style="font-size: 11px; font-weight: bold; color: #7f8c8d; text-transform: uppercase;">Progress %</div>
+                        <div style="font-size: 24px; font-weight: bold; color: var(--primary); margin: 4px 0;">${resPct}%</div>
+                        <div style="font-size: 12px; color: #555;">${completedTasks} of ${totalTasks} tasks done</div>
+                    </div>
+                    <div class="metric-card ${resOverdueTasks.length > 0 ? 'danger' : 'success'}" onclick="toggleExclusiveDrilldown('ind_stat', 'drill_ind_overdue')">
+                        <div style="font-size: 11px; font-weight: bold; color: #7f8c8d; text-transform: uppercase;">Overdue Tasks 🔍</div>
+                        <div style="font-size: 24px; font-weight: bold; color: var(--primary); margin: 4px 0;">${resOverdueTasks.length} Tasks</div>
+                        <div style="font-size: 12px; color: #555;">Click to view overdue list</div>
+                    </div>
+                </div>
+
+                <div id="drill_ind_overdue" class="drilldown-panel">
+                    <div style="font-weight: bold; color: var(--danger); margin-bottom: 8px;">⚠️ Overdue Tasks for ${currentTab}:</div>
+                    ${resOverdueTasks.length > 0 ? resOverdueTasks.map(t => `<div style="padding: 6px 0; border-bottom: 1px solid var(--border); font-size: 13px;">• ${t.TASK} — Due: ${t.DATE_STR}</div>`).join('') : '<div style="font-size:13px; color:#555;">No overdue tasks.</div>'}
+                </div>
+            </div>
+
+            <!-- 2. RESOURCE SUMMARY SECTION -->
+            <div class="dashboard-section">
+                <div class="section-header">Resource Summary</div>
+                <div class="section-sub">Workload utilization and daily overload status for ${currentTab}</div>
+                <div class="grid-cards">
+                    <div class="metric-card success">
+                        <div style="font-size: 11px; font-weight: bold; color: #7f8c8d; text-transform: uppercase;">Resource Utilization</div>
+                        <div style="font-size: 24px; font-weight: bold; color: var(--primary); margin: 4px 0;">${totalHours.toFixed(1)} hrs</div>
+                        <div style="font-size: 12px; color: #555;">Total assigned workload</div>
+                    </div>
+                    <div class="metric-card">
+                        <div style="font-size: 11px; font-weight: bold; color: #7f8c8d; text-transform: uppercase;">Remaining Capacity</div>
+                        <div style="font-size: 24px; font-weight: bold; color: var(--danger); margin: 4px 0;">${remainingCapacity.toFixed(1)} hrs</div>
+                        <div style="font-size: 12px; color: #555;">Pending effort hours</div>
+                    </div>
+                    <div class="metric-card ${overloadedDates.size > 0 ? 'warning' : 'success'}" onclick="toggleExclusiveDrilldown('ind_res', 'drill_ind_overload')">
+                        <div style="font-size: 11px; font-weight: bold; color: #7f8c8d; text-transform: uppercase;">Overloaded Days (>7 hrs) 🔍</div>
+                        <div style="font-size: 24px; font-weight: bold; color: var(--primary); margin: 4px 0;">${overloadedDates.size} Day(s)</div>
+                        <div style="font-size: 12px; color: #555;">Click to view overloaded days</div>
+                    </div>
+                </div>
+
+                <div id="drill_ind_overload" class="drilldown-panel">
+                    <div style="font-weight: bold; color: var(--warning); margin-bottom: 8px;">⚠️ Overloaded Dates for ${currentTab}:</div>
+                    ${overloadedDates.size > 0 ? Array.from(overloadedDates).map(dt => `<div style="padding: 6px 0; border-bottom: 1px solid var(--border); font-size: 13px;">• Date: ${dt} (Total > 7 hrs)</div>`).join('') : '<div style="font-size:13px; color:#555;">No overloaded days. All workloads are ≤ 7 hours.</div>'}
+                </div>
+            </div>
+
+            <!-- 3. PROJECT INSIGHTS SECTION -->
+            <div class="dashboard-section">
+                <div class="section-header">Project Insights</div>
+                <div class="section-sub">Category-wise progress and daily scheduled workload distribution</div>
+                <div class="analytics-grid">
+                    <div class="panel">
+                        <div style="font-weight: bold; color: var(--primary); margin-bottom: 15px;">Category-wise Progress</div>
+                        <div id="categoryChartContainer" style="display: flex; flex-direction: column; justify-content: center; min-height: 180px;"></div>
+                    </div>
+                    <div class="panel">
+                        <div style="font-weight: bold; color: var(--primary); margin-bottom: 15px;">Daily Scheduled Workload (Hours)</div>
+                        <div class="chart-container" id="dailyChartContainer"></div>
+                    </div>
+                </div>
+            </div>
+        `;
+
+        // Render Category Chart
+        const catMap = {};
+        filtered.forEach(d => { catMap[d.Category] = (catMap[d.Category] || 0) + d['ESTIMATED HOURS']; });
+        const maxCatHrs = Math.max(...Object.values(catMap), 1);
+        let catHTML = '';
+        for (let cat in catMap) {
+            let hrs = catMap[cat];
+            let pct = (hrs / maxCatHrs) * 100;
+            catHTML += `
+                <div style="margin-bottom: 8px;">
+                    <div style="display: flex; justify-content: space-between; font-size: 12px; margin-bottom: 3px; font-weight: bold; color: #34495e;">
+                        <span>${cat}</span>
+                        <span>${hrs.toFixed(1)} hrs</span>
+                    </div>
+                    <div style="background: #ecf0f1; border-radius: 4px; height: 14px; overflow: hidden;">
+                        <div class="cat-bar" data-width="${pct}"></div>
+                    </div>
+                </div>`;
+        }
+        document.getElementById('categoryChartContainer').innerHTML = catHTML || '<div style="color:#95a5a6; text-align:center;">No Data</div>';
+
+        // Render Daily Chart
+        const dateMap = {};
+        filtered.forEach(d => { dateMap[d.DATE_STR] = (dateMap[d.DATE_STR] || 0) + d['ESTIMATED HOURS']; });
+        const sortedDates = Object.keys(dateMap);
+        const maxDateHrs = Math.max(...Object.values(dateMap), 1);
+        let dailyHTML = '';
+        sortedDates.forEach(dt => {
+            let hrs = dateMap[dt];
+            let pct = (hrs / maxDateHrs) * 100;
+            dailyHTML += `
+                <div style="flex: 1; display: flex; flex-direction: column; align-items: center; height: 100%; justify-content: flex-end;">
+                    <span style="font-size: 10px; font-weight: bold; margin-bottom: 4px; color: #2c3e50;">${hrs.toFixed(1)}</span>
+                    <div class="daily-bar" data-height="${pct}"></div>
+                    <span style="font-size: 10px; color: #7f8c8d; margin-top: 5px; transform: rotate(-45deg); display: inline-block;">${formatChartDate(dt)}</span>
+                </div>`;
+        });
+        document.getElementById('dailyChartContainer').innerHTML = dailyHTML || '<div style="color:#95a5a6; width:100%; text-align:center;">No Data</div>';
+
+        setTimeout(() => {
+            document.querySelectorAll('.cat-bar').forEach(bar => {
+                bar.style.width = bar.getAttribute('data-width') + '%';
+            });
+            document.querySelectorAll('.daily-bar').forEach(bar => {
+                bar.style.height = bar.getAttribute('data-height') + '%';
+            });
+        }, 50);
+
+        document.getElementById('tableHeaderRow').innerHTML = `
+            <th>Date</th>
+            <th>Task Name</th>
+            <th>Category</th>
+            <th>Est. Hours</th>
+            <th>Actual Hours</th>
+            <th>Status</th>
+        `;
+
+        let tableHTML = '';
+        filtered.forEach(d => {
+            let badgeClass = d.STATUS === 'Completed' ? 'badge-completed' : (d.STATUS === 'In-Progress' ? 'badge-inprogress' : 'badge-notstarted');
+            let actHrs = d['ACTUAL HOURS'] > 0 ? d['ACTUAL HOURS'].toFixed(1) + ' hrs' : '-';
+            
+            let rowClass = '';
+            let taskDate = parseDateObj(d.DATE_STR);
+            let isOverdue = false;
+            if (d.STATUS !== 'Completed' && taskDate) {
+                taskDate.setHours(0,0,0,0);
+                if (taskDate < today) {
+                    isOverdue = true;
+                }
+            }
+
+            let isOverload = d['ESTIMATED HOURS'] > 7 && d['ACTUAL HOURS'] > 7;
+
+            if (isOverdue) {
+                rowClass = 'row-overdue';
+            } else if (isOverload) {
+                rowClass = 'row-warning';
+            }
+
+            tableHTML += `
+                <tr class="${rowClass}">
+                    <td>${d.DATE_STR}</td>
+                    <td style="font-weight: 600;">
+                        ${d.TASK} 
+                        ${isOverdue ? '⚠️ <span style="font-size:11px; color:var(--danger); font-weight:normal;">(Overdue)</span>' : ''} 
+                        ${isOverload ? '⚠️ <span style="font-size:11px; color:var(--warning); font-weight:normal;">(Overload)</span>' : ''}
+                    </td>
+                    <td><span style="background: #f0f3f6; padding: 2px 6px; border-radius: 3px; font-size: 12px;">${d.Category}</span></td>
+                    <td>${d['ESTIMATED HOURS'].toFixed(1)} hrs</td>
+                    <td>${actHrs}</td>
+                    <td><span class="badge ${badgeClass}">${d.STATUS}</span></td>
+                </tr>`;
+        });
+        document.getElementById('tableBody').innerHTML = tableHTML || '<tr><td colspan="6" style="text-align:center; padding:20px; color:#95a5a6;">No matching tasks found</td></tr>';
+        document.getElementById('tableSectionTitle').innerText = `${currentTab}'s Task Schedule Details`;
+    }
+
+    function resetFilters() {
+        document.getElementById('statusFilter').value = 'ALL';
+        document.getElementById('categoryFilter').value = 'ALL';
+        document.getElementById('searchInput').value = '';
+        render();
+    }
+
+    window.onload = loadGoogleSheetsJSONP;
+</script>
+
+</body>
+</html>
