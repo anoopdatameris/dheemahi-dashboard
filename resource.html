@@ -298,12 +298,8 @@
         inputEl.disabled = true;
         
         try {
-            const response = await fetch(WEB_APP_URL, {
-                method: 'POST',
-                headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-                body: JSON.stringify({ id: sheetId, gid: gid, task: taskName, actualHours: val })
-            });
-
+            const updateUrl = `${WEB_APP_URL}?gid=${gid}&task=${encodeURIComponent(taskName)}&hours=${val}&t=${new Date().getTime()}`;
+            const response = await fetch(updateUrl);
             const result = await response.json();
 
             if (result.status === "success") {
@@ -312,7 +308,7 @@
                     targetItem['ACTUAL HOURS'] = val;
                 }
 
-                alert(`✓ Updated Row ${result.row}, Col ${result.col} in Google Sheet!`);
+                alert(`✓ Successfully updated Google Sheet (Row ${result.row})!`);
                 inputEl.disabled = false;
                 loadAllSheets();
             } else {
@@ -320,7 +316,7 @@
             }
         } catch (err) {
             console.error('Error saving hours:', err);
-            alert('Failed to save actual hours to Google Sheet: ' + err.message);
+            alert('Failed to save actual hours to Google Sheet.');
             inputEl.disabled = false;
         }
     }
