@@ -253,7 +253,6 @@
         
         let header = rows[0].map(h => h.toLowerCase());
         
-        // Flexible column mapping with fallback defaults (Col A=0, Col B=1, Col D=3, Col E=4, Col I=8)
         let colDate = header.findIndex(h => h.includes('date'));
         let colTask = header.findIndex(h => h.includes('task') || h.includes('activity') || h.includes('work'));
         let colEst = header.findIndex(h => h.includes('est') || h.includes('planned') || h.includes('hour'));
