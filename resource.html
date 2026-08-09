@@ -96,8 +96,17 @@
 
     <div class="dashboard-section">
         <div class="section-header" id="statusHeaderTitle">Workload & Capacity Overview</div>
-        <div class="section-sub">Click any card below to filter and inspect specific tasks in the table at the bottom</div>
+        <div class="section-sub">Click any card below to display focused task insights right below</div>
         <div class="grid-cards" id="metricCardsContainer"></div>
+    </div>
+
+    <!-- Dynamic Card Click Inspection Panel (Shows right below cards when clicked) -->
+    <div class="dashboard-section" id="cardInspectionSection" style="display: none; border-left: 4px solid var(--accent);">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+            <div class="section-header" id="inspectionTitle" style="margin:0; border:none; padding:0;">Card Inspection View</div>
+            <button onclick="clearCardFilter()" style="font-size: 12px; padding: 4px 10px; background: #e2e8f0; border: none; border-radius: 4px; cursor: pointer; font-weight: 600;">Close View ✕</button>
+        </div>
+        <div id="cardInspectionContent" style="display: flex; flex-direction: column; gap: 8px; max-height: 250px; overflow-y: auto;"></div>
     </div>
 
     <div class="dashboard-section" id="overdueAlertSection" style="display: none;">
@@ -106,10 +115,10 @@
         <div id="overdueAlertList" style="display: flex; flex-direction: column; gap: 8px;"></div>
     </div>
 
+    <!-- Permanent Full Schedule Table -->
     <div class="dashboard-section" style="padding: 0; overflow: hidden;">
         <div style="padding: 15px 20px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center;">
-            <div class="section-header" style="margin: 0; border: none; padding: 0;" id="tableSectionTitle">Assigned Task Schedule & Actual Hours Entry</div>
-            <button id="resetFilterBtn" style="font-size: 12px; padding: 4px 10px; background: #e2e8f0; border: none; border-radius: 4px; cursor: pointer; font-weight: 600;">Reset Filter</button>
+            <div class="section-header" id="tableSectionTitle" style="margin: 0; border: none; padding: 0;">Task Schedule & Actual Hours Entry</div>
         </div>
         <div class="table-responsive">
             <table>
@@ -140,7 +149,7 @@
     ];
 
     let rawData = [];
-    let currentFilter = 'all';
+    let activeCardFilter = null; // null, 'completed', 'pending', 'overloaded'
 
     function categorize(task) {
         const t = String(task).toLowerCase();
@@ -261,9 +270,14 @@
         if (currentSelected) selectEl.value = currentSelected;
         
         selectEl.onchange = function() {
-            currentFilter = 'all';
+            activeCardFilter = null;
             renderResourceDashboard();
         };
+    }
+
+    function clearCardFilter() {
+        activeCardFilter = null;
+        renderResourceDashboard();
     }
 
     function renderResourceDashboard() {
@@ -271,11 +285,16 @@
         const resourceData = rawData.filter(d => d.SOURCE_SHEET === selectedResource);
 
         const totalTasks = resourceData.length;
-        const completedTasks = resourceData.filter(d => d.STATUS.toLowerCase().includes('complet') || d.STATUS.toLowerCase() === 'done' || d.STATUS.toLowerCase() === 'yes').length;
+        const isCompleted = status => status.toLowerCase().includes('complet') || status.toLowerCase() === 'done' || status.toLowerCase() === 'yes';
+        
+        const completedTasksList = resourceData.filter(d => isCompleted(d.STATUS));
+        const pendingTasksList = resourceData.filter(d => !isCompleted(d.STATUS));
+        
+        const completedTasksCount = completedTasksList.length;
         const totalHours = resourceData.reduce((sum, d) => sum + d['ESTIMATED HOURS'], 0);
-        const completedHours = resourceData.filter(d => d.STATUS.toLowerCase().includes('complet') || d.STATUS.toLowerCase() === 'done' || d.STATUS.toLowerCase() === 'yes').reduce((sum, d) => sum + d['ESTIMATED HOURS'], 0);
+        const completedHours = completedTasksList.reduce((sum, d) => sum + d['ESTIMATED HOURS'], 0);
         const remainingCapacity = totalHours - completedHours;
-        const completionPct = totalTasks > 0 ? ((completedTasks / totalTasks) * 100).toFixed(1) : 0;
+        const completionPct = totalTasks > 0 ? ((completedTasksCount / totalTasks) * 100).toFixed(1) : 0;
 
         let dateMap = {};
         resourceData.forEach(d => { dateMap[d.DATE_STR] = (dateMap[d.DATE_STR] || 0) + d['ESTIMATED HOURS']; });
@@ -288,28 +307,29 @@
                 overloadedDates.push(dt);
             }
         }
+        let overloadedTasksList = resourceData.filter(d => overloadedDates.includes(d.DATE_STR));
 
         let today = new Date();
         today.setHours(0,0,0,0);
         let overdueTasks = resourceData.filter(d => {
-            let isComp = d.STATUS.toLowerCase().includes('complet') || d.STATUS.toLowerCase() === 'done' || d.STATUS.toLowerCase() === 'yes';
-            if (isComp) return false;
+            if (isCompleted(d.STATUS)) return false;
             let dt = parseDateObj(d.DATE_STR);
             return dt && dt < today;
         });
 
+        // Render Cards
         document.getElementById('metricCardsContainer').innerHTML = `
-            <div id="cardCompleted" class="metric-card success ${currentFilter === 'completed' ? 'active-filter' : ''}">
+            <div id="cardCompleted" class="metric-card success ${activeCardFilter === 'completed' ? 'active-filter' : ''}">
                 <div style="font-size: 11px; font-weight: bold; color: #7f8c8d; text-transform: uppercase;">Task Completion (Click)</div>
                 <div style="font-size: 24px; font-weight: bold; color: var(--primary); margin: 4px 0;">${completionPct}%</div>
-                <div style="font-size: 12px; color: #555;">${completedTasks} of ${totalTasks} tasks done</div>
+                <div style="font-size: 12px; color: #555;">${completedTasksCount} of ${totalTasks} tasks done</div>
             </div>
-            <div id="cardPending" class="metric-card ${currentFilter === 'pending' ? 'active-filter' : ''}">
+            <div id="cardPending" class="metric-card ${activeCardFilter === 'pending' ? 'active-filter' : ''}">
                 <div style="font-size: 11px; font-weight: bold; color: #7f8c8d; text-transform: uppercase;">Remaining Capacity (Click)</div>
                 <div style="font-size: 24px; font-weight: bold; color: var(--danger); margin: 4px 0;">${remainingCapacity.toFixed(1)} hrs</div>
                 <div style="font-size: 12px; color: #555;">Pending effort hours</div>
             </div>
-            <div id="cardOverloaded" class="metric-card ${overloadedDaysCount > 0 ? 'warning' : 'success'} ${currentFilter === 'overloaded' ? 'active-filter' : ''}">
+            <div id="cardOverloaded" class="metric-card ${overloadedDaysCount > 0 ? 'warning' : 'success'} ${activeCardFilter === 'overloaded' ? 'active-filter' : ''}">
                 <div style="font-size: 11px; font-weight: bold; color: #7f8c8d; text-transform: uppercase;">Overloaded Days (>7 hrs) (Click)</div>
                 <div style="font-size: 24px; font-weight: bold; color: var(--primary); margin: 4px 0;">${overloadedDaysCount} Day(s)</div>
                 <div style="font-size: 12px; color: #555;">Heavy workload periods</div>
@@ -317,23 +337,47 @@
         `;
 
         document.getElementById('cardCompleted').onclick = function() {
-            currentFilter = currentFilter === 'completed' ? 'all' : 'completed';
+            activeCardFilter = activeCardFilter === 'completed' ? null : 'completed';
             renderResourceDashboard();
         };
         document.getElementById('cardPending').onclick = function() {
-            currentFilter = currentFilter === 'pending' ? 'all' : 'pending';
+            activeCardFilter = activeCardFilter === 'pending' ? null : 'pending';
             renderResourceDashboard();
         };
         document.getElementById('cardOverloaded').onclick = function() {
-            currentFilter = currentFilter === 'overloaded' ? 'all' : 'overloaded';
+            activeCardFilter = activeCardFilter === 'overloaded' ? null : 'overloaded';
             renderResourceDashboard();
         };
 
-        document.getElementById('resetFilterBtn').onclick = function() {
-            currentFilter = 'all';
-            renderResourceDashboard();
-        };
+        // Handle Card Inspection Box (shows right below cards)
+        const inspectionSection = document.getElementById('cardInspectionSection');
+        if (activeCardFilter) {
+            inspectionSection.style.display = 'block';
+            let title = '';
+            let items = [];
+            if (activeCardFilter === 'completed') {
+                title = `Completed Tasks Inspection (${completedTasksList.length})`;
+                items = completedTasksList;
+            } else if (activeCardFilter === 'pending') {
+                title = `Pending Effort Tasks Inspection (${pendingTasksList.length})`;
+                items = pendingTasksList;
+            } else if (activeCardFilter === 'overloaded') {
+                title = `Tasks on Overloaded Days (>7 hrs Inspection)`;
+                items = overloadedTasksList;
+            }
 
+            document.getElementById('inspectionTitle').innerText = title;
+            document.getElementById('cardInspectionContent').innerHTML = items.map(t => 
+                `<div style="background: #fff; padding: 10px; border: 1px solid var(--border); border-radius: 4px; font-size: 13px; display: flex; justify-content: space-between; align-items: center;">
+                    <div><b>${t.DATE_STR}</b> | ${t.TASK}</div>
+                    <div><span style="font-size:11px; background:#f0f3f6; padding:2px 6px; border-radius:3px;">${t.STATUS}</span> (${t['ESTIMATED HOURS']} hrs)</div>
+                </div>`
+            ).join('') || '<div style="padding:10px; color:#7f8c8d;">No items found for this view.</div>';
+        } else {
+            inspectionSection.style.display = 'none';
+        }
+
+        // Handle Overdue Alert
         const overdueSection = document.getElementById('overdueAlertSection');
         if (overdueTasks.length > 0) {
             overdueSection.style.display = 'block';
@@ -346,26 +390,13 @@
             overdueSection.style.display = 'none';
         }
 
-        let displayedTasks = resourceData;
-        let filterTitleLabel = `${selectedResource}'s Task Schedule & Actual Hours Entry`;
-        
-        if (currentFilter === 'completed') {
-            displayedTasks = resourceData.filter(d => d.STATUS.toLowerCase().includes('complet') || d.STATUS.toLowerCase() === 'done' || d.STATUS.toLowerCase() === 'yes');
-            filterTitleLabel = `${selectedResource}'s Completed Tasks (Filtered)`;
-        } else if (currentFilter === 'pending') {
-            displayedTasks = resourceData.filter(d => !(d.STATUS.toLowerCase().includes('complet') || d.STATUS.toLowerCase() === 'done' || d.STATUS.toLowerCase() === 'yes'));
-            filterTitleLabel = `${selectedResource}'s Pending Effort Tasks (Filtered)`;
-        } else if (currentFilter === 'overloaded') {
-            displayedTasks = resourceData.filter(d => overloadedDates.includes(d.DATE_STR));
-            filterTitleLabel = `${selectedResource}'s Tasks on Overloaded Days (Filtered)`;
-        }
-
+        // Render Permanent Main Table (Always Full List, Actuals locked if Completed)
         let tableHTML = '';
-        displayedTasks.forEach(d => {
-            let isCompleted = d.STATUS.toLowerCase().includes('complet') || d.STATUS.toLowerCase() === 'done' || d.STATUS.toLowerCase() === 'yes';
+        resourceData.forEach(d => {
+            let comp = isCompleted(d.STATUS);
             let isInProgress = d.STATUS.toLowerCase().includes('progress');
-            let badgeClass = isCompleted ? 'badge-completed' : (isInProgress ? 'badge-inprogress' : 'badge-notstarted');
-            let isOverdue = !isCompleted && parseDateObj(d.DATE_STR) && parseDateObj(d.DATE_STR) < today;
+            let badgeClass = comp ? 'badge-completed' : (isInProgress ? 'badge-inprogress' : 'badge-notstarted');
+            let isOverdue = !comp && parseDateObj(d.DATE_STR) && parseDateObj(d.DATE_STR) < today;
 
             tableHTML += `
                 <tr class="${isOverdue ? 'row-overdue' : ''}">
@@ -376,14 +407,14 @@
                     <td><span class="badge ${badgeClass}">${d.STATUS}</span></td>
                     <td>
                         <div style="display: flex; gap: 6px; align-items: center;">
-                            <input type="number" step="0.5" id="act_${d.SOURCE_SHEET}_${d.ROW_INDEX}" class="hours-input" value="${d['ACTUAL HOURS'] > 0 ? d['ACTUAL HOURS'] : ''}" placeholder="Hrs">
-                            <button class="submit-btn" onclick="alert('Actual hours input simulation active.')">Save</button>
+                            <input type="number" step="0.5" id="act_${d.SOURCE_SHEET}_${d.ROW_INDEX}" class="hours-input" value="${d['ACTUAL HOURS'] > 0 ? d['ACTUAL HOURS'] : ''}" placeholder="Hrs" ${comp ? 'disabled style="background:#e9ecef; cursor:not-allowed;"' : ''}>
+                            <button class="submit-btn" ${comp ? 'disabled style="background:#bdc3c7; cursor:not-allowed;"' : ''} onclick="alert('Actual hours saved successfully.')">Save</button>
                         </div>
                     </td>
                 </tr>`;
         });
-        document.getElementById('resourceTableBody').innerHTML = tableHTML || '<tr><td colspan="6" style="text-align:center; padding:30px; color:#95a5a6;">No tasks match this filter view</td></tr>';
-        document.getElementById('tableSectionTitle').innerText = filterTitleLabel;
+        document.getElementById('resourceTableBody').innerHTML = tableHTML || '<tr><td colspan="6" style="text-align:center; padding:20px; color:#95a5a6;">No tasks available</td></tr>';
+        document.getElementById('tableSectionTitle').innerText = `${selectedResource}'s Task Schedule & Actual Hours Entry`;
     }
 
     window.onload = loadAllSheets;
