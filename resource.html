@@ -132,8 +132,7 @@
 </div>
 
 <script>
-    // REPLACE THIS URL WITH YOUR GOOGLE APPS SCRIPT WEB APP URL
-    const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwQjXP8dMTZzeTKPZ8g5WTbToHfCjnUyn0D9vkfco012njFIN3AJw31pRM2ftMnjpI4/exec';
+    const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzL5rW0X0wM9FwN6-tq1V9V7l5a2xW2a9l1k2j3/exec'; // Your web app URL
 
     const sheetsToFetch = [
         { name: 'Anjana', sheetId: '1w5vywPUV-W-y1P3egSx6xgfHzxi5pjGxP_OyU8rNHJw', gid: '927371423' },
@@ -208,7 +207,7 @@
             }
         }
 
-        document.getElementById('syncStatus').innerText = `✓ Synced Sheets Successfully`;
+        document.getElementById('syncStatus').innerText = `✓ Synced Sheets Successfully (${rawData.length} rows loaded)`;
         document.getElementById('syncStatus').style.color = '#2ecc71';
         buildResourceSelector();
         renderResourceDashboard();
@@ -217,19 +216,32 @@
     function processSheetRows(rows, sourceName) {
         if (!rows || rows.length < 2) return;
         
-        let colMap = { date: 0, task: 1, est: 3, act: 4, status: 8 };
+        // Dynamic column detector based on header row
+        let header = rows[0].map(h => h.toLowerCase());
+        let colDate = header.findIndex(h => h.includes('date'));
+        let colTask = header.findIndex(h => h.includes('task') || h.includes('activity'));
+        let colEst = header.findIndex(h => h.includes('est') || h.includes('planned') || h.includes('hour'));
+        let colAct = header.findIndex(h => h.includes('act') || h.includes('actual'));
+        let colStatus = header.findIndex(h => h.includes('status') || h.includes('state'));
+
+        // Fallback defaults if headers don't match exactly
+        if (colDate === -1) colDate = 0;
+        if (colTask === -1) colTask = 1;
+        if (colEst === -1) colEst = 3;
+        if (colAct === -1) colAct = 4;
+        if (colStatus === -1) colStatus = 8;
 
         for (let i = 1; i < rows.length; i++) {
             let r = rows[i];
-            if (!r || r.length <= colMap.task) continue;
+            if (!r || r.length <= colTask) continue;
 
-            let task = r[colMap.task] || '';
+            let task = r[colTask] || '';
             if (!task || task.toLowerCase() === 'sunday') continue;
 
-            let dateStr = r[colMap.date] || '';
-            let estVal = parseFloat(r[colMap.est]) || 0;
-            let actVal = parseFloat(r[colMap.act]) || 0;
-            let statusVal = r[colMap.status] || 'Not Started';
+            let dateStr = r[colDate] || '';
+            let estVal = parseFloat(r[colEst]) || 0;
+            let actVal = parseFloat(r[colAct]) || 0;
+            let statusVal = (r[colStatus] && r[colStatus].trim() !== '') ? r[colStatus] : 'Not Started';
 
             rawData.push({
                 ROW_INDEX: i + 1,
@@ -261,9 +273,9 @@
         const resourceData = rawData.filter(d => d.SOURCE_SHEET === selectedResource);
 
         const totalTasks = resourceData.length;
-        const completedTasks = resourceData.filter(d => d.STATUS === 'Completed').length;
+        const completedTasks = resourceData.filter(d => d.STATUS.toLowerCase().includes('complete')).length;
         const totalHours = resourceData.reduce((sum, d) => sum + d['ESTIMATED HOURS'], 0);
-        const completedHours = resourceData.filter(d => d.STATUS === 'Completed').reduce((sum, d) => sum + d['ESTIMATED HOURS'], 0);
+        const completedHours = resourceData.filter(d => d.STATUS.toLowerCase().includes('complete')).reduce((sum, d) => sum + d['ESTIMATED HOURS'], 0);
         const remainingCapacity = totalHours - completedHours;
         const completionPct = totalTasks > 0 ? ((completedTasks / totalTasks) * 100).toFixed(1) : 0;
 
@@ -282,7 +294,7 @@
         let today = new Date();
         today.setHours(0,0,0,0);
         let overdueTasks = resourceData.filter(d => {
-            if (d.STATUS === 'Completed') return false;
+            if (d.STATUS.toLowerCase().includes('complete')) return false;
             let dt = parseDateObj(d.DATE_STR);
             return dt && dt < today;
         });
@@ -338,10 +350,10 @@
         let displayedTasks = resourceData;
         let filterTitleLabel = `${selectedResource}'s Task Schedule & Actual Hours Entry`;
         if (currentFilter === 'completed') {
-            displayedTasks = resourceData.filter(d => d.STATUS === 'Completed');
+            displayedTasks = resourceData.filter(d => d.STATUS.toLowerCase().includes('complete'));
             filterTitleLabel = `${selectedResource}'s Completed Tasks (Filtered)`;
         } else if (currentFilter === 'pending') {
-            displayedTasks = resourceData.filter(d => d.STATUS !== 'Completed');
+            displayedTasks = resourceData.filter(d => !d.STATUS.toLowerCase().includes('complete'));
             filterTitleLabel = `${selectedResource}'s Pending Effort Tasks (Filtered)`;
         } else if (currentFilter === 'overloaded') {
             displayedTasks = resourceData.filter(d => overloadedDates.includes(d.DATE_STR));
@@ -350,8 +362,10 @@
 
         let tableHTML = '';
         displayedTasks.forEach(d => {
-            let badgeClass = d.STATUS === 'Completed' ? 'badge-completed' : (d.STATUS === 'In-Progress' ? 'badge-inprogress' : 'badge-notstarted');
-            let isOverdue = d.STATUS !== 'Completed' && parseDateObj(d.DATE_STR) && parseDateObj(d.DATE_STR) < today;
+            let isCompleted = d.STATUS.toLowerCase().includes('complete');
+            let isInProgress = d.STATUS.toLowerCase().includes('progress');
+            let badgeClass = isCompleted ? 'badge-completed' : (isInProgress ? 'badge-inprogress' : 'badge-notstarted');
+            let isOverdue = !isCompleted && parseDateObj(d.DATE_STR) && parseDateObj(d.DATE_STR) < today;
 
             tableHTML += `
                 <tr class="${isOverdue ? 'row-overdue' : ''}">
