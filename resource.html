@@ -138,7 +138,6 @@
     ];
 
     let rawData = [];
-    let loadedCount = 0;
     let currentFilter = 'all'; // 'all', 'completed', 'pending', 'overloaded'
 
     function categorize(task) {
@@ -164,66 +163,89 @@
         return null;
     }
 
-    function loadAllSheets() {
+    function parseCSV(text) {
+        let lines = text.split('\n');
+        let result = [];
+        for (let i = 0; i < lines.length; i++) {
+            let row = [];
+            let inCol = false;
+            let entry = '';
+            for (let c = 0; c < lines[i].length; c++) {
+                let char = lines[i][c];
+                if (char === '"') {
+                    inCol = !inCol;
+                } else if (char === ',' && !inCol) {
+                    row.push(entry.trim());
+                    entry = '';
+                } else {
+                    entry += char;
+                }
+            }
+            row.push(entry.trim());
+            result.push(row);
+        }
+        return result;
+    }
+
+    async function loadAllSheets() {
         rawData = [];
-        loadedCount = 0;
         document.getElementById('syncStatus').innerText = '(Syncing sheets...)';
         document.getElementById('syncStatus').style.color = '#3498db';
 
-        sheetsToFetch.forEach(sheet => {
-            let script = document.createElement('script');
-            script.src = `https://docs.google.com/spreadsheets/d/${sheet.sheetId}/gviz/tq?gid=${sheet.gid}&tqx=out:json;responseHandler=handle${sheet.name}`;
-            document.body.appendChild(script);
-        });
+        for (const sheet of sheetsToFetch) {
+            try {
+                // Using allorigins proxy to bypass HTTPS / CORS restrictions seamlessly on GitHub Pages
+                const targetUrl = `https://docs.google.com/spreadsheets/d/${sheet.sheetId}/export?format=csv&gid=${sheet.gid}`;
+                const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(targetUrl)}`;
+                
+                const res = await fetch(proxyUrl);
+                if (!res.ok) throw new Error('Network response failed');
+                const data = await res.json();
+                
+                if (data && data.contents) {
+                    const rows = parseCSV(data.contents);
+                    processSheetRows(rows, sheet.name);
+                }
+            } catch (err) {
+                console.error(`Error loading sheet for ${sheet.name}:`, err);
+            }
+        }
+
+        document.getElementById('syncStatus').innerText = `✓ Synced Sheets Successfully`;
+        document.getElementById('syncStatus').style.color = '#2ecc71';
+        buildResourceSelector();
+        renderResourceDashboard();
     }
 
-    function handleDataResponse(response, sourceName) {
-        if (response && response.table && response.table.rows) {
-            const rows = response.table.rows;
-            let colMap = { date: 0, task: 1, est: 3, act: 4, status: 8 };
+    function processSheetRows(rows, sourceName) {
+        if (!rows || rows.length < 2) return;
+        
+        let colMap = { date: 0, task: 1, est: 3, act: 4, status: 8 };
 
-            rows.forEach((r, rowIndex) => {
-                let c = r.c;
-                if (!c) return;
-                let task = (c[colMap.task] && c[colMap.task].v) ? String(c[colMap.task].v) : '';
-                if (!task || task.toLowerCase() === 'sunday') return;
+        for (let i = 1; i < rows.length; i++) {
+            let r = rows[i];
+            if (!r || r.length <= colMap.task) continue;
 
-                let dateStr = '';
-                if (c[colMap.date]) {
-                    dateStr = c[colMap.date].f || c[colMap.date].v || '';
-                    if (String(dateStr).includes('Date(')) {
-                        let parts = String(dateStr).match(/\d+/g);
-                        if (parts && parts.length >= 3) {
-                            let months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-                            dateStr = `${String(parts[2]).padStart(2, '0')}-${months[parseInt(parts[1])]}-${parts[0]}`;
-                        }
-                    }
-                }
+            let task = r[colMap.task] || '';
+            if (!task || task.toLowerCase() === 'sunday') continue;
 
-                rawData.push({
-                    ROW_INDEX: rowIndex + 2,
-                    SOURCE_SHEET: sourceName,
-                    DATE_STR: String(dateStr),
-                    TASK: task,
-                    'ESTIMATED HOURS': c[colMap.est] ? parseFloat(c[colMap.est].v) || 0 : 0,
-                    'ACTUAL HOURS': c[colMap.act] ? parseFloat(c[colMap.act].v) || 0 : 0,
-                    STATUS: c[colMap.status] && c[colMap.status].v ? String(c[colMap.status].v) : 'Not Started',
-                    Category: categorize(task)
-                });
+            let dateStr = r[colMap.date] || '';
+            let estVal = parseFloat(r[colMap.est]) || 0;
+            let actVal = parseFloat(r[colMap.act]) || 0;
+            let statusVal = r[colMap.status] || 'Not Started';
+
+            rawData.push({
+                ROW_INDEX: i + 1,
+                SOURCE_SHEET: sourceName,
+                DATE_STR: String(dateStr),
+                TASK: task,
+                'ESTIMATED HOURS': estVal,
+                'ACTUAL HOURS': actVal,
+                STATUS: statusVal,
+                Category: categorize(task)
             });
         }
-
-        loadedCount++;
-        if (loadedCount === sheetsToFetch.length) {
-            document.getElementById('syncStatus').innerText = `✓ Synced Sheets Successfully`;
-            document.getElementById('syncStatus').style.color = '#2ecc71';
-            buildResourceSelector();
-            renderResourceDashboard();
-        }
     }
-
-    window.handleAnjana = function(res) { handleDataResponse(res, 'Anjana'); };
-    window.handleRumaisa = function(res) { handleDataResponse(res, 'Rumaisa'); };
 
     function buildResourceSelector() {
         const selectEl = document.getElementById('resourceSelect');
@@ -287,7 +309,7 @@
             </div>
         `;
 
-        // Bind click events explicitly via JavaScript
+        // Bind click events explicitly
         document.getElementById('cardCompleted').onclick = function() {
             currentFilter = currentFilter === 'completed' ? 'all' : 'completed';
             renderResourceDashboard();
@@ -318,7 +340,7 @@
             overdueSection.style.display = 'none';
         }
 
-        // Filter table data based on user selection
+        // Filter table data
         let displayedTasks = resourceData;
         let filterTitleLabel = `${selectedResource}'s Task Schedule & Actual Hours Entry`;
         if (currentFilter === 'completed') {
