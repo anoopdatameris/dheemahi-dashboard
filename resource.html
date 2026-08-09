@@ -300,9 +300,13 @@
         inputEl.disabled = true;
         
         try {
-            const saveUrl = `${WEB_APP_URL}?id=${sheetId}&gid=${gid}&row=${rowIndex}&actualHours=${val}`;
-            
-            const response = await fetch(saveUrl);
+            // Send data cleanly via POST request payload to doPost(e)
+            const response = await fetch(WEB_APP_URL, {
+                method: 'POST',
+                headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+                body: JSON.stringify({ id: sheetId, gid: gid, row: rowIndex, actualHours: val })
+            });
+
             const result = await response.json();
 
             if (result.status === "success") {
@@ -471,7 +475,7 @@
                     </td>
                 </tr>`;
         });
-        document.getElementById('resourceTableBody').innerHTML = tableHTML || '<tr><td colspan="6" style="text-align:center; padding:30px; color:#94a3b8;">No tasks available</td></tr>';
+        document.getElementById('resourceTableBody').innerHTML = tableHTML || '<tr><td colspan="6" style="text-align:center; padding:40px; color:#94a3b8;">No tasks available</td></tr>';
         document.getElementById('tableSectionTitle').innerHTML = `<i class="fa-solid fa-calendar-days"></i> ${selectedResource}'s Task Schedule & Actual Hours Entry`;
     }
 
