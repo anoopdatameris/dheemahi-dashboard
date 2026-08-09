@@ -89,18 +89,18 @@
 
     <div class="resource-selector-bar">
         <label for="resourceSelect">Select Resource View:</label>
-        <select id="resourceSelect">
+        <select id="resourceSelect" onchange="onResourceChange()">
             <!-- Populated dynamically -->
         </select>
     </div>
 
     <div class="dashboard-section">
-        <div class="section-header" id="statusHeaderTitle">Workload & Capacity Overview</div>
+        <div class="section-header">Workload & Capacity Overview</div>
         <div class="section-sub">Click any card below to display focused task insights right below</div>
         <div class="grid-cards" id="metricCardsContainer"></div>
     </div>
 
-    <!-- Dynamic Card Click Inspection Panel (Shows right below cards when clicked) -->
+    <!-- Direct Card Click Inspection Panel -->
     <div class="dashboard-section" id="cardInspectionSection" style="display: none; border-left: 4px solid var(--accent);">
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
             <div class="section-header" id="inspectionTitle" style="margin:0; border:none; padding:0;">Card Inspection View</div>
@@ -117,7 +117,7 @@
 
     <!-- Permanent Full Schedule Table -->
     <div class="dashboard-section" style="padding: 0; overflow: hidden;">
-        <div style="padding: 15px 20px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center;">
+        <div style="padding: 15px 20px; border-bottom: 1px solid var(--border);">
             <div class="section-header" id="tableSectionTitle" style="margin: 0; border: none; padding: 0;">Task Schedule & Actual Hours Entry</div>
         </div>
         <div class="table-responsive">
@@ -268,11 +268,16 @@
         const currentSelected = selectEl.value;
         selectEl.innerHTML = sheetsToFetch.map(s => `<option value="${s.name}">👤 ${s.name}</option>`).join('');
         if (currentSelected) selectEl.value = currentSelected;
-        
-        selectEl.onchange = function() {
-            activeCardFilter = null;
-            renderResourceDashboard();
-        };
+    }
+
+    function onResourceChange() {
+        activeCardFilter = null;
+        renderResourceDashboard();
+    }
+
+    function filterByCard(type) {
+        activeCardFilter = (activeCardFilter === type) ? null : type;
+        renderResourceDashboard();
     }
 
     function clearCardFilter() {
@@ -281,7 +286,7 @@
     }
 
     function renderResourceDashboard() {
-        const selectedResource = document.getElementById('resourceSelect').value;
+        const selectedResource = document.getElementById('resourceSelect').value || 'Anjana';
         const resourceData = rawData.filter(d => d.SOURCE_SHEET === selectedResource);
 
         const totalTasks = resourceData.length;
@@ -317,39 +322,26 @@
             return dt && dt < today;
         });
 
-        // Render Cards
+        // Render Metric Cards with direct inline onclick triggers
         document.getElementById('metricCardsContainer').innerHTML = `
-            <div id="cardCompleted" class="metric-card success ${activeCardFilter === 'completed' ? 'active-filter' : ''}">
+            <div onclick="filterByCard('completed')" class="metric-card success ${activeCardFilter === 'completed' ? 'active-filter' : ''}">
                 <div style="font-size: 11px; font-weight: bold; color: #7f8c8d; text-transform: uppercase;">Task Completion (Click)</div>
                 <div style="font-size: 24px; font-weight: bold; color: var(--primary); margin: 4px 0;">${completionPct}%</div>
                 <div style="font-size: 12px; color: #555;">${completedTasksCount} of ${totalTasks} tasks done</div>
             </div>
-            <div id="cardPending" class="metric-card ${activeCardFilter === 'pending' ? 'active-filter' : ''}">
+            <div onclick="filterByCard('pending')" class="metric-card ${activeCardFilter === 'pending' ? 'active-filter' : ''}">
                 <div style="font-size: 11px; font-weight: bold; color: #7f8c8d; text-transform: uppercase;">Remaining Capacity (Click)</div>
                 <div style="font-size: 24px; font-weight: bold; color: var(--danger); margin: 4px 0;">${remainingCapacity.toFixed(1)} hrs</div>
                 <div style="font-size: 12px; color: #555;">Pending effort hours</div>
             </div>
-            <div id="cardOverloaded" class="metric-card ${overloadedDaysCount > 0 ? 'warning' : 'success'} ${activeCardFilter === 'overloaded' ? 'active-filter' : ''}">
+            <div onclick="filterByCard('overloaded')" class="metric-card ${overloadedDaysCount > 0 ? 'warning' : 'success'} ${activeCardFilter === 'overloaded' ? 'active-filter' : ''}">
                 <div style="font-size: 11px; font-weight: bold; color: #7f8c8d; text-transform: uppercase;">Overloaded Days (>7 hrs) (Click)</div>
                 <div style="font-size: 24px; font-weight: bold; color: var(--primary); margin: 4px 0;">${overloadedDaysCount} Day(s)</div>
                 <div style="font-size: 12px; color: #555;">Heavy workload periods</div>
             </div>
         `;
 
-        document.getElementById('cardCompleted').onclick = function() {
-            activeCardFilter = activeCardFilter === 'completed' ? null : 'completed';
-            renderResourceDashboard();
-        };
-        document.getElementById('cardPending').onclick = function() {
-            activeCardFilter = activeCardFilter === 'pending' ? null : 'pending';
-            renderResourceDashboard();
-        };
-        document.getElementById('cardOverloaded').onclick = function() {
-            activeCardFilter = activeCardFilter === 'overloaded' ? null : 'overloaded';
-            renderResourceDashboard();
-        };
-
-        // Handle Card Inspection Box (shows right below cards)
+        // Handle Card Inspection Section visibility and items
         const inspectionSection = document.getElementById('cardInspectionSection');
         if (activeCardFilter) {
             inspectionSection.style.display = 'block';
@@ -377,7 +369,7 @@
             inspectionSection.style.display = 'none';
         }
 
-        // Handle Overdue Alert
+        // Handle Overdue Alert Section
         const overdueSection = document.getElementById('overdueAlertSection');
         if (overdueTasks.length > 0) {
             overdueSection.style.display = 'block';
@@ -390,7 +382,7 @@
             overdueSection.style.display = 'none';
         }
 
-        // Render Permanent Main Table (Always Full List, Actuals locked if Completed)
+        // Render Main Permanent Schedule Table (Locking inputs if completed)
         let tableHTML = '';
         resourceData.forEach(d => {
             let comp = isCompleted(d.STATUS);
@@ -413,7 +405,7 @@
                     </td>
                 </tr>`;
         });
-        document.getElementById('resourceTableBody').innerHTML = tableHTML || '<tr><td colspan="6" style="text-align:center; padding:20px; color:#95a5a6;">No tasks available</td></tr>';
+        document.getElementById('resourceTableBody').innerHTML = tableHTML || '<tr><td colspan="6" style="text-align:center; padding:30px; color:#95a5a6;">No tasks available</td></tr>';
         document.getElementById('tableSectionTitle').innerText = `${selectedResource}'s Task Schedule & Actual Hours Entry`;
     }
 
