@@ -281,7 +281,6 @@
                 SOURCE_SHEET: sheet.name,
                 SHEET_ID: sheet.sheetId,
                 GID: sheet.gid,
-                ROW_INDEX: i + 1,
                 DATE_STR: String(dateStr),
                 TASK: task,
                 'ESTIMATED HOURS': estVal,
@@ -292,7 +291,7 @@
         }
     }
 
-    async function saveActualHours(sourceSheetName, rowIndex, sheetId, gid, inputId) {
+    async function saveActualHours(sourceSheetName, taskName, sheetId, gid, inputId) {
         const inputEl = document.getElementById(inputId);
         if (!inputEl) return;
 
@@ -300,7 +299,7 @@
         inputEl.disabled = true;
         
         try {
-            const updateUrl = `${WEB_APP_URL}?id=${sheetId}&gid=${gid}&row=${rowIndex}&hours=${val}&t=${new Date().getTime()}`;
+            const updateUrl = `${WEB_APP_URL}?id=${sheetId}&gid=${gid}&task=${encodeURIComponent(taskName)}&hours=${val}&t=${new Date().getTime()}`;
             const response = await fetch(updateUrl);
             const textResponse = await response.text();
             
@@ -308,11 +307,11 @@
             try {
                 result = JSON.parse(textResponse);
             } catch (e) {
-                result = { status: "success", row: rowIndex, col: 5 };
+                result = { status: "success", row: 0, col: 5 };
             }
 
             if (result.status === "success") {
-                let targetItem = rawData.find(d => d.SOURCE_SHEET === sourceSheetName && d.ROW_INDEX === rowIndex);
+                let targetItem = rawData.find(d => d.SOURCE_SHEET === sourceSheetName && d.TASK === taskName);
                 if (targetItem) {
                     targetItem['ACTUAL HOURS'] = val;
                 }
@@ -461,7 +460,8 @@
             let badgeClass = comp ? 'badge-completed' : (isInProgress ? 'badge-inprogress' : 'badge-notstarted');
             let iconClass = comp ? 'fa-check' : (isInProgress ? 'fa-spinner' : 'fa-circle');
             let isOverdue = !comp && parseDateObj(d.DATE_STR) && parseDateObj(d.DATE_STR) < today;
-            let inputId = `act_${d.SOURCE_SHEET}_${d.ROW_INDEX}`;
+            let inputId = `act_${d.SOURCE_SHEET}_${index}`;
+            let safeTaskName = d.TASK.replace(/'/g, "\\'").replace(/"/g, '&quot;');
 
             tableHTML += `
                 <tr class="${isOverdue ? 'row-overdue' : ''}">
@@ -473,7 +473,7 @@
                     <td>
                         <div style="display: flex; gap: 8px; align-items: center;">
                             <input type="number" step="0.5" id="${inputId}" class="hours-input" value="${d['ACTUAL HOURS'] > 0 ? d['ACTUAL HOURS'] : ''}" placeholder="Hrs">
-                            <button class="submit-btn" onclick="saveActualHours('${d.SOURCE_SHEET}', ${d.ROW_INDEX}, '${d.SHEET_ID}', '${d.GID}', '${inputId}')"><i class="fa-solid fa-floppy-disk"></i> Save</button>
+                            <button class="submit-btn" onclick="saveActualHours('${d.SOURCE_SHEET}', '${safeTaskName}', '${d.SHEET_ID}', '${d.GID}', '${inputId}')"><i class="fa-solid fa-floppy-disk"></i> Save</button>
                         </div>
                     </td>
                 </tr>`;
