@@ -89,7 +89,7 @@
 
     <div class="resource-selector-bar">
         <label for="resourceSelect">Select Resource View:</label>
-        <select id="resourceSelect" onchange="currentFilter = 'all'; renderResourceDashboard();">
+        <select id="resourceSelect">
             <!-- Populated dynamically -->
         </select>
     </div>
@@ -109,7 +109,7 @@
     <div class="dashboard-section" style="padding: 0; overflow: hidden;">
         <div style="padding: 15px 20px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center;">
             <div class="section-header" style="margin: 0; border: none; padding: 0;" id="tableSectionTitle">Assigned Task Schedule & Actual Hours Entry</div>
-            <button onclick="currentFilter = 'all'; renderResourceDashboard();" style="font-size: 12px; padding: 4px 10px; background: #e2e8f0; border: none; border-radius: 4px; cursor: pointer; font-weight: 600;">Reset Filter</button>
+            <button id="resetFilterBtn" style="font-size: 12px; padding: 4px 10px; background: #e2e8f0; border: none; border-radius: 4px; cursor: pointer; font-weight: 600;">Reset Filter</button>
         </div>
         <div class="table-responsive">
             <table>
@@ -227,12 +227,14 @@
 
     function buildResourceSelector() {
         const selectEl = document.getElementById('resourceSelect');
+        const currentSelected = selectEl.value;
         selectEl.innerHTML = sheetsToFetch.map(s => `<option value="${s.name}">👤 ${s.name}</option>`).join('');
-    }
-
-    function setFilter(filterType) {
-        currentFilter = filterType;
-        renderResourceDashboard();
+        if (currentSelected) selectEl.value = currentSelected;
+        
+        selectEl.onchange = function() {
+            currentFilter = 'all';
+            renderResourceDashboard();
+        };
     }
 
     function renderResourceDashboard() {
@@ -266,24 +268,43 @@
             return dt && dt < today;
         });
 
-        // Render Metric Cards with active state styling
+        // Render Metric Cards
         document.getElementById('metricCardsContainer').innerHTML = `
-            <div class="metric-card success ${currentFilter === 'completed' ? 'active-filter' : ''}" onclick="setFilter('completed')">
+            <div id="cardCompleted" class="metric-card success ${currentFilter === 'completed' ? 'active-filter' : ''}">
                 <div style="font-size: 11px; font-weight: bold; color: #7f8c8d; text-transform: uppercase;">Task Completion (Click)</div>
                 <div style="font-size: 24px; font-weight: bold; color: var(--primary); margin: 4px 0;">${completionPct}%</div>
                 <div style="font-size: 12px; color: #555;">${completedTasks} of ${totalTasks} tasks done</div>
             </div>
-            <div class="metric-card ${currentFilter === 'pending' ? 'active-filter' : ''}" onclick="setFilter('pending')">
+            <div id="cardPending" class="metric-card ${currentFilter === 'pending' ? 'active-filter' : ''}">
                 <div style="font-size: 11px; font-weight: bold; color: #7f8c8d; text-transform: uppercase;">Remaining Capacity (Click)</div>
                 <div style="font-size: 24px; font-weight: bold; color: var(--danger); margin: 4px 0;">${remainingCapacity.toFixed(1)} hrs</div>
                 <div style="font-size: 12px; color: #555;">Pending effort hours</div>
             </div>
-            <div class="metric-card ${overloadedDaysCount > 0 ? 'warning' : 'success'} ${currentFilter === 'overloaded' ? 'active-filter' : ''}" onclick="setFilter('overloaded')">
+            <div id="cardOverloaded" class="metric-card ${overloadedDaysCount > 0 ? 'warning' : 'success'} ${currentFilter === 'overloaded' ? 'active-filter' : ''}">
                 <div style="font-size: 11px; font-weight: bold; color: #7f8c8d; text-transform: uppercase;">Overloaded Days (>7 hrs) (Click)</div>
                 <div style="font-size: 24px; font-weight: bold; color: var(--primary); margin: 4px 0;">${overloadedDaysCount} Day(s)</div>
                 <div style="font-size: 12px; color: #555;">Heavy workload periods</div>
             </div>
         `;
+
+        // Bind click events explicitly via JavaScript
+        document.getElementById('cardCompleted').onclick = function() {
+            currentFilter = currentFilter === 'completed' ? 'all' : 'completed';
+            renderResourceDashboard();
+        };
+        document.getElementById('cardPending').onclick = function() {
+            currentFilter = currentFilter === 'pending' ? 'all' : 'pending';
+            renderResourceDashboard();
+        };
+        document.getElementById('cardOverloaded').onclick = function() {
+            currentFilter = currentFilter === 'overloaded' ? 'all' : 'overloaded';
+            renderResourceDashboard();
+        };
+
+        document.getElementById('resetFilterBtn').onclick = function() {
+            currentFilter = 'all';
+            renderResourceDashboard();
+        };
 
         const overdueSection = document.getElementById('overdueAlertSection');
         if (overdueTasks.length > 0) {
@@ -299,18 +320,16 @@
 
         // Filter table data based on user selection
         let displayedTasks = resourceData;
-        let filterTitleLabel = "All Assigned Tasks";
+        let filterTitleLabel = `${selectedResource}'s Task Schedule & Actual Hours Entry`;
         if (currentFilter === 'completed') {
             displayedTasks = resourceData.filter(d => d.STATUS === 'Completed');
-            filterTitleLabel = `${selectedResource}'s Completed Tasks`;
+            filterTitleLabel = `${selectedResource}'s Completed Tasks (Filtered)`;
         } else if (currentFilter === 'pending') {
             displayedTasks = resourceData.filter(d => d.STATUS !== 'Completed');
-            filterTitleLabel = `${selectedResource}'s Pending Effort Tasks`;
+            filterTitleLabel = `${selectedResource}'s Pending Effort Tasks (Filtered)`;
         } else if (currentFilter === 'overloaded') {
             displayedTasks = resourceData.filter(d => overloadedDates.includes(d.DATE_STR));
-            filterTitleLabel = `${selectedResource}'s Tasks on Overloaded Days (>7 hrs)`;
-        } else {
-            filterTitleLabel = `${selectedResource}'s Task Schedule & Actual Hours Entry`;
+            filterTitleLabel = `${selectedResource}'s Tasks on Overloaded Days (Filtered)`;
         }
 
         let tableHTML = '';
