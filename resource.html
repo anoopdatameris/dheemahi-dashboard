@@ -232,7 +232,8 @@
 
         for (const sheet of sheetsToFetch) {
             try {
-                const fetchUrl = `${WEB_APP_URL}?id=${sheet.sheetId}&gid=${sheet.gid}`;
+                // Added unique timestamp (&t=...) to prevent browser/Google caching old data
+                const fetchUrl = `${WEB_APP_URL}?id=${sheet.sheetId}&gid=${sheet.gid}&t=${new Date().getTime()}`;
                 const res = await fetch(fetchUrl);
                 if (!res.ok) throw new Error('Network response failed');
                 const text = await res.text();
@@ -304,7 +305,12 @@
             await fetch(saveUrl, { method: 'GET', mode: 'no-cors' });
 
             alert('✓ Actual hours successfully saved to Google Sheet!');
-            loadAllSheets();
+            
+            // Wait 1.5 seconds for Google Sheets backend to commit the write before reloading fresh data
+            setTimeout(() => {
+                loadAllSheets();
+            }, 1500);
+
         } catch (err) {
             console.error('Error saving hours:', err);
             alert('Failed to save actual hours.');
