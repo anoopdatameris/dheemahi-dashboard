@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Dheemahi Ayur — Combined Execution Dashboard</title>
+    <title>Dheemahi Ayur — Execution Dashboard</title>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
@@ -35,10 +35,20 @@
         h1 { font-size: 20px; margin: 0; font-weight: 600; display: flex; align-items: center; gap: 10px; }
         h1 i { color: #38bdf8; }
 
-        .header-actions a { color: #38bdf8; text-decoration: none; font-weight: 500; font-size: 14px; margin-left: 20px; transition: color 0.2s; }
-        .header-actions a:hover { color: #7dd3fc; }
+        .nav-tabs { display: flex; gap: 10px; }
+        .nav-tab { background: rgba(255,255,255,0.1); color: #94a3b8; border: none; padding: 8px 16px; border-radius: 6px; font-weight: 600; cursor: pointer; transition: all 0.2s; }
+        .nav-tab.active { background: #38bdf8; color: #0f172a; }
+        
         .refresh-btn { background: #38bdf8; color: #0f172a; border: none; padding: 8px 16px; border-radius: 6px; font-weight: 600; cursor: pointer; transition: background 0.2s; }
         .refresh-btn:hover { background: #7dd3fc; }
+
+        .resource-selector-bar {
+            background: var(--card-bg); padding: 18px 25px; border-radius: 10px; border: 1px solid var(--border);
+            margin-bottom: 25px; display: flex; align-items: center; gap: 15px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+        }
+        .resource-selector-bar label { font-size: 12px; font-weight: 700; color: #64748b; text-transform: uppercase; letter-spacing: 0.5px; }
+        select { padding: 9px 14px; border: 1px solid var(--border); border-radius: 6px; font-size: 14px; font-weight: 600; color: var(--primary); background: #fff; outline: none; cursor: pointer; }
 
         .dashboard-section {
             background: var(--card-bg); padding: 25px; border-radius: 12px; border: 1px solid var(--border);
@@ -50,8 +60,11 @@
         .grid-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 20px; }
         .metric-card { 
             background: #ffffff; padding: 20px; border-radius: 10px; border: 1px solid var(--border);
-            border-left: 5px solid var(--accent); box-shadow: 0 2px 4px rgba(0,0,0,0.02); position: relative; overflow: hidden;
+            border-left: 5px solid var(--accent); cursor: pointer; transition: all 0.25s ease; user-select: none;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.02); position: relative; overflow: hidden;
         }
+        .metric-card:hover { transform: translateY(-3px); box-shadow: 0 10px 15px -3px rgba(0,0,0,0.05); border-color: #94a3b8; }
+        .metric-card.active-filter { border: 2px solid var(--accent); background: #f0f9ff; }
         .metric-card.warning { border-left-color: var(--warning); }
         .metric-card.danger { border-left-color: var(--danger); }
         .metric-card.success { border-left-color: var(--success); }
@@ -64,57 +77,123 @@
         tbody tr:hover { background-color: #f8fafc; }
         tr:last-child td { border-bottom: none; }
 
+        tr.row-overdue { background-color: #fff5f5 !important; border-left: 4px solid var(--danger); }
+        
         .badge { padding: 5px 10px; border-radius: 20px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; display: inline-flex; align-items: center; gap: 4px; }
         .badge-completed { background: var(--success-bg); color: var(--success); }
         .badge-inprogress { background: var(--warning-bg); color: #b45309; }
         .badge-notstarted { background: var(--danger-bg); color: var(--danger); }
         .sync-badge { font-size: 12px; font-weight: 500; color: #10b981; display: inline-flex; align-items: center; gap: 5px; background: rgba(16, 185, 129, 0.1); padding: 4px 10px; border-radius: 20px; }
+        .category-tag { background: #f1f5f9; color: #475569; padding: 3px 8px; border-radius: 4px; font-size: 12px; font-weight: 500; border: 1px solid #e2e8f0; }
+        
+        .view-container { display: none; }
+        .view-container.active { display: block; }
     </style>
 </head>
 <body>
 
 <div class="container">
     <header>
-        <h1><i class="fa-solid fa-layer-group"></i> Dheemahi Ayur — Combined Execution Dashboard</h1>
-        <div class="header-actions">
-            <a href="resource.html"><i class="fa-solid fa-user-gear"></i> Go to Resource Dashboard →</a>
+        <h1><i class="fa-solid fa-chart-line"></i> Dheemahi Ayur — Execution Dashboard</h1>
+        <div style="display: flex; align-items: center; gap: 15px; flex-wrap: wrap;">
+            <div class="nav-tabs">
+                <button class="nav-tab active" id="tabCombined" onclick="switchView('combined')"><i class="fa-solid fa-layer-group"></i> Combined Dashboard</button>
+                <button class="nav-tab" id="tabResource" onclick="switchView('resource')"><i class="fa-solid fa-user-gear"></i> Resource Dashboard</button>
+            </div>
             <button class="refresh-btn" onclick="loadAllSheets()"><i class="fa-solid fa-rotate"></i> Refresh Data</button>
         </div>
     </header>
 
-    <div class="dashboard-section" style="display: flex; justify-content: space-between; align-items: center;">
-        <div>
-            <div class="section-header" style="margin:0;"><i class="fa-solid fa-building-columns"></i> Multi-Sheet Overview</div>
-            <div class="section-sub" style="margin:0;">Aggregated live metrics across all resource team members</div>
+    <!-- ================= COMBINED VIEW ================= -->
+    <div id="viewCombined" class="view-container active">
+        <div class="dashboard-section" style="display: flex; justify-content: space-between; align-items: center;">
+            <div>
+                <div class="section-header" style="margin:0;"><i class="fa-solid fa-building-columns"></i> Multi-Sheet Overview</div>
+                <div class="section-sub" style="margin:0;">Aggregated live metrics across all resource team members</div>
+            </div>
+            <span id="syncStatusCombined" class="sync-badge"><i class="fa-solid fa-circle-notch fa-spin"></i> Syncing sheets...</span>
         </div>
-        <span id="syncStatus" class="sync-badge"><i class="fa-solid fa-circle-notch fa-spin"></i> Syncing sheets...</span>
+
+        <div class="dashboard-section">
+            <div class="section-header"><i class="fa-solid fa-chart-pie"></i> Combined Team Performance Metrics</div>
+            <div class="section-sub">Overall progress tracking across all active sheets</div>
+            <div class="grid-cards" id="combinedMetricsContainer"></div>
+        </div>
+
+        <div class="dashboard-section" style="padding: 0; overflow: hidden;">
+            <div style="padding: 18px 25px; border-bottom: 1px solid var(--border); background: #ffffff;">
+                <div class="section-header" style="margin: 0; border: none; padding: 0;"><i class="fa-solid fa-table-list"></i> Combined Team Task Master View</div>
+            </div>
+            <div class="table-responsive">
+                <table>
+                    <thead>
+                        <tr>
+                            <th><i class="fa-solid fa-user"></i> Resource</th>
+                            <th><i class="fa-regular fa-calendar"></i> Date</th>
+                            <th><i class="fa-solid fa-list-check"></i> Task Name</th>
+                            <th><i class="fa-regular fa-clock"></i> Est. Hours</th>
+                            <th><i class="fa-solid fa-signal"></i> Status</th>
+                        </tr>
+                    </thead>
+                    <tbody id="combinedTableBody">
+                        <tr><td colspan="5" style="text-align:center; padding:40px; color:#94a3b8;"><i class="fa-solid fa-spinner fa-spin fa-2x"></i><p style="margin-top:10px;">Loading team data...</p></td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
     </div>
 
-    <div class="dashboard-section">
-        <div class="section-header"><i class="fa-solid fa-chart-pie"></i> Combined Team Performance Metrics</div>
-        <div class="section-sub">Overall progress tracking across all active sheets</div>
-        <div class="grid-cards" id="combinedMetricsContainer"></div>
-    </div>
-
-    <div class="dashboard-section" style="padding: 0; overflow: hidden;">
-        <div style="padding: 18px 25px; border-bottom: 1px solid var(--border); background: #ffffff;">
-            <div class="section-header" style="margin: 0; border: none; padding: 0;"><i class="fa-solid fa-table-list"></i> Combined Team Task Master View</div>
+    <!-- ================= RESOURCE VIEW ================= -->
+    <div id="viewResource" class="view-container">
+        <div class="resource-selector-bar">
+            <label for="resourceSelect"><i class="fa-solid fa-user-gear"></i> Select Resource View:</label>
+            <select id="resourceSelect" onchange="onResourceChange()">
+                <!-- Populated dynamically -->
+            </select>
+            <span id="syncStatusResource" class="sync-badge" style="margin-left: auto;"><i class="fa-solid fa-circle-notch fa-spin"></i> Syncing sheets...</span>
         </div>
-        <div class="table-responsive">
-            <table>
-                <thead>
-                    <tr>
-                        <th><i class="fa-solid fa-user"></i> Resource</th>
-                        <th><i class="fa-regular fa-calendar"></i> Date</th>
-                        <th><i class="fa-solid fa-list-check"></i> Task Name</th>
-                        <th><i class="fa-regular fa-clock"></i> Est. Hours</th>
-                        <th><i class="fa-solid fa-signal"></i> Status</th>
-                    </tr>
-                </thead>
-                <tbody id="combinedTableBody">
-                    <tr><td colspan="5" style="text-align:center; padding:40px; color:#94a3b8;"><i class="fa-solid fa-spinner fa-spin fa-2x"></i><p style="margin-top:10px;">Loading team data...</p></td></tr>
-                </tbody>
-            </table>
+
+        <div class="dashboard-section">
+            <div class="section-header"><i class="fa-solid fa-gauge-high"></i> Workload & Capacity Overview</div>
+            <div class="section-sub">Click any card below to display focused task insights right below</div>
+            <div class="grid-cards" id="metricCardsContainer"></div>
+        </div>
+
+        <!-- Direct Card Click Inspection Panel -->
+        <div class="dashboard-section" id="cardInspectionSection" style="display: none; border-left: 5px solid var(--accent); background: #fdfefe;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                <div class="section-header" id="inspectionTitle" style="margin:0; border:none; padding:0; color: var(--accent);"><i class="fa-solid fa-magnifying-glass"></i> Card Inspection View</div>
+                <button onclick="clearCardFilter()" style="font-size: 12px; padding: 5px 12px; background: #e2e8f0; color: #475569; border: none; border-radius: 6px; cursor: pointer; font-weight: 600;">Close View ✕</button>
+            </div>
+            <div id="cardInspectionContent" style="display: flex; flex-direction: column; gap: 10px; max-height: 280px; overflow-y: auto; padding-right: 5px;"></div>
+        </div>
+
+        <div class="dashboard-section" id="overdueAlertSection" style="display: none; border-left: 5px solid var(--danger);">
+            <div class="section-header" style="color: var(--danger);"><i class="fa-solid fa-triangle-exclamation"></i> Overdue Tasks Alert</div>
+            <div class="section-sub">The following tasks are past their due date and require immediate attention</div>
+            <div id="overdueAlertList" style="display: flex; flex-direction: column; gap: 8px;"></div>
+        </div>
+
+        <div class="dashboard-section" style="padding: 0; overflow: hidden;">
+            <div style="padding: 18px 25px; border-bottom: 1px solid var(--border); background: #ffffff;">
+                <div class="section-header" id="tableSectionTitle" style="margin: 0; border: none; padding: 0;"><i class="fa-solid fa-calendar-days"></i> Task Schedule View</div>
+            </div>
+            <div class="table-responsive">
+                <table>
+                    <thead>
+                        <tr>
+                            <th><i class="fa-regular fa-calendar"></i> Date</th>
+                            <th><i class="fa-solid fa-list-check"></i> Task Name</th>
+                            <th><i class="fa-solid fa-tag"></i> Category</th>
+                            <th><i class="fa-regular fa-clock"></i> Est. Hours</th>
+                            <th><i class="fa-solid fa-signal"></i> Status</th>
+                        </tr>
+                    </thead>
+                    <tbody id="resourceTableBody">
+                        <tr><td colspan="5" style="text-align:center; padding:40px; color:#94a3b8;"><i class="fa-solid fa-spinner fa-spin fa-2x"></i><p style="margin-top:10px;">Loading data...</p></td></tr>
+                    </tbody>
+                </table>
+            </div>
         </div>
     </div>
 </div>
@@ -128,6 +207,47 @@
     ];
 
     let rawData = [];
+    let activeCardFilter = null;
+
+    function switchView(viewName) {
+        document.getElementById('tabCombined').classList.remove('active');
+        document.getElementById('tabResource').classList.remove('active');
+        document.getElementById('viewCombined').classList.remove('active');
+        document.getElementById('viewResource').classList.remove('active');
+
+        if (viewName === 'combined') {
+            document.getElementById('tabCombined').classList.add('active');
+            document.getElementById('viewCombined').classList.add('active');
+            renderCombinedDashboard();
+        } else {
+            document.getElementById('tabResource').classList.add('active');
+            document.getElementById('viewResource').classList.add('active');
+            renderResourceDashboard();
+        }
+    }
+
+    function categorize(task) {
+        const t = String(task).toLowerCase();
+        if (['seo', 'serp', 'meta', 'h1', 'alt', 'noindex', 'link', 'image'].some(k => t.includes(k))) return 'On-Page SEO';
+        if (t.includes('directory') || t.includes('directories')) return 'Directory Submissions';
+        if (t.includes('reel')) return 'Social Media / Reel';
+        if (t.includes('meeting')) return 'Management & Meetings';
+        if (t.includes('spam') || t.includes('security')) return 'Security & Audit';
+        return 'Other';
+    }
+
+    function parseDateObj(dateStr) {
+        if (!dateStr) return null;
+        let parts = dateStr.split('-');
+        if (parts.length === 3) {
+            let months = {'Jan':0,'Feb':1,'Mar':2,'Apr':3,'May':4,'Jun':5,'Jul':6,'Aug':7,'Sep':8,'Oct':9,'Nov':10,'Dec':11};
+            let d = parseInt(parts[0]);
+            let m = months[parts[1]];
+            let y = parseInt(parts[2]);
+            if (!isNaN(d) && m !== undefined && !isNaN(y)) return new Date(y, m, d);
+        }
+        return null;
+    }
 
     function parseCSV(text) {
         let lines = text.split('\n');
@@ -155,7 +275,8 @@
 
     async function loadAllSheets() {
         rawData = [];
-        document.getElementById('syncStatus').innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i> Syncing sheets...';
+        document.getElementById('syncStatusCombined').innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i> Syncing sheets...';
+        document.getElementById('syncStatusResource').innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i> Syncing sheets...';
 
         for (const sheet of sheetsToFetch) {
             try {
@@ -170,8 +291,12 @@
             }
         }
 
-        document.getElementById('syncStatus').innerHTML = `<i class="fa-solid fa-circle-check"></i> Synced (${rawData.length} rows)`;
+        document.getElementById('syncStatusCombined').innerHTML = `<i class="fa-solid fa-circle-check"></i> Synced (${rawData.length} rows)`;
+        document.getElementById('syncStatusResource').innerHTML = `<i class="fa-solid fa-circle-check"></i> Synced (${rawData.length} rows)`;
+        
+        buildResourceSelector();
         renderCombinedDashboard();
+        renderResourceDashboard();
     }
 
     function processSheetRows(rows, sheet) {
@@ -204,7 +329,8 @@
                 DATE_STR: String(dateStr),
                 TASK: task,
                 'ESTIMATED HOURS': estVal,
-                STATUS: statusVal
+                STATUS: statusVal,
+                Category: categorize(task)
             });
         }
     }
@@ -251,6 +377,151 @@
                 </tr>`;
         });
         document.getElementById('combinedTableBody').innerHTML = tableHTML || '<tr><td colspan="5" style="text-align:center; padding:30px; color:#94a3b8;">No tasks available</td></tr>';
+    }
+
+    function buildResourceSelector() {
+        const selectEl = document.getElementById('resourceSelect');
+        const currentSelected = selectEl.value;
+        selectEl.innerHTML = sheetsToFetch.map(s => `<option value="${s.name}">👤 ${s.name}</option>`).join('');
+        if (currentSelected) selectEl.value = currentSelected;
+    }
+
+    function onResourceChange() {
+        activeCardFilter = null;
+        renderResourceDashboard();
+    }
+
+    function filterByCard(type) {
+        activeCardFilter = (activeCardFilter === type) ? null : type;
+        renderResourceDashboard();
+    }
+
+    function clearCardFilter() {
+        activeCardFilter = null;
+        renderResourceDashboard();
+    }
+
+    function renderResourceDashboard() {
+        const selectedResource = document.getElementById('resourceSelect').value || 'Anjana';
+        const resourceData = rawData.filter(d => d.SOURCE_SHEET === selectedResource);
+
+        const totalTasks = resourceData.length;
+        const isCompleted = status => status.toLowerCase().includes('complet') || status.toLowerCase() === 'done' || status.toLowerCase() === 'yes';
+        
+        const completedTasksList = resourceData.filter(d => isCompleted(d.STATUS));
+        const pendingTasksList = resourceData.filter(d => !isCompleted(d.STATUS));
+        
+        const completedTasksCount = completedTasksList.length;
+        const totalHours = resourceData.reduce((sum, d) => sum + d['ESTIMATED HOURS'], 0);
+        const completedHours = completedTasksList.reduce((sum, d) => sum + d['ESTIMATED HOURS'], 0);
+        const remainingCapacity = totalHours - completedHours;
+        const completionPct = totalTasks > 0 ? ((completedTasksCount / totalTasks) * 100).toFixed(1) : 0;
+
+        let dateMap = {};
+        resourceData.forEach(d => { dateMap[d.DATE_STR] = (dateMap[d.DATE_STR] || 0) + d['ESTIMATED HOURS']; });
+        
+        let overloadedDaysCount = 0;
+        let overloadedDates = [];
+        for (let dt in dateMap) {
+            if (dateMap[dt] > 7) {
+                overloadedDaysCount++;
+                overloadedDates.push(dt);
+            }
+        }
+        let overloadedTasksList = resourceData.filter(d => overloadedDates.includes(d.DATE_STR));
+
+        let today = new Date();
+        today.setHours(0,0,0,0);
+        let overdueTasks = resourceData.filter(d => {
+            if (isCompleted(d.STATUS)) return false;
+            let dt = parseDateObj(d.DATE_STR);
+            return dt && dt < today;
+        });
+
+        // Render Metric Cards
+        document.getElementById('metricCardsContainer').innerHTML = `
+            <div onclick="filterByCard('completed')" class="metric-card success ${activeCardFilter === 'completed' ? 'active-filter' : ''}">
+                <i class="fa-solid fa-circle-check metric-icon" style="color: var(--success);"></i>
+                <div style="font-size: 11px; font-weight: 700; color: #64748b; text-transform: uppercase;">Task Completion</div>
+                <div style="font-size: 26px; font-weight: 700; color: var(--primary); margin: 6px 0;">${completionPct}%</div>
+                <div style="font-size: 12px; color: #64748b;">${completedTasksCount} of ${totalTasks} tasks done</div>
+            </div>
+            <div onclick="filterByCard('pending')" class="metric-card ${activeCardFilter === 'pending' ? 'active-filter' : ''}">
+                <i class="fa-solid fa-clock metric-icon" style="color: var(--accent);"></i>
+                <div style="font-size: 11px; font-weight: 700; color: #64748b; text-transform: uppercase;">Remaining Capacity</div>
+                <div style="font-size: 26px; font-weight: 700; color: var(--danger); margin: 6px 0;">${remainingCapacity.toFixed(1)} hrs</div>
+                <div style="font-size: 12px; color: #64748b;">Pending effort hours</div>
+            </div>
+            <div onclick="filterByCard('overloaded')" class="metric-card ${overloadedDaysCount > 0 ? 'warning' : 'success'} ${activeCardFilter === 'overloaded' ? 'active-filter' : ''}">
+                <i class="fa-solid fa-triangle-exclamation metric-icon" style="color: var(--warning);"></i>
+                <div style="font-size: 11px; font-weight: 700; color: #64748b; text-transform: uppercase;">Overloaded Days (>7 hrs)</div>
+                <div style="font-size: 26px; font-weight: 700; color: var(--primary); margin: 6px 0;">${overloadedDaysCount} Day(s)</div>
+                <div style="font-size: 12px; color: #64748b;">Heavy workload periods</div>
+            </div>
+        `;
+
+        // Handle Card Inspection Section
+        const inspectionSection = document.getElementById('cardInspectionSection');
+        if (activeCardFilter) {
+            inspectionSection.style.display = 'block';
+            let title = '';
+            let items = [];
+            if (activeCardFilter === 'completed') {
+                title = `<i class="fa-solid fa-circle-check"></i> Completed Tasks Inspection (${completedTasksList.length})`;
+                items = completedTasksList;
+            } else if (activeCardFilter === 'pending') {
+                title = `<i class="fa-solid fa-clock"></i> Pending Effort Tasks Inspection (${pendingTasksList.length})`;
+                items = pendingTasksList;
+            } else if (activeCardFilter === 'overloaded') {
+                title = `<i class="fa-solid fa-triangle-exclamation"></i> Tasks on Overloaded Days (>7 hrs Inspection)`;
+                items = overloadedTasksList;
+            }
+
+            document.getElementById('inspectionTitle').innerHTML = title;
+            document.getElementById('cardInspectionContent').innerHTML = items.map(t => 
+                `<div style="background: #ffffff; padding: 12px 15px; border: 1px solid var(--border); border-radius: 8px; font-size: 13px; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 1px 2px rgba(0,0,0,0.02);">
+                    <div><b style="color: var(--primary);">${t.DATE_STR}</b> — ${t.TASK}</div>
+                    <div><span class="badge badge-inprogress">${t.STATUS}</span> <span style="font-weight: 600; margin-left: 8px; color: #475569;">(${t['ESTIMATED HOURS']} hrs)</span></div>
+                </div>`
+            ).join('') || '<div style="padding:15px; color:#64748b; text-align:center;">No items found for this view.</div>';
+        } else {
+            inspectionSection.style.display = 'none';
+        }
+
+        // Handle Overdue Alert Section
+        const overdueSection = document.getElementById('overdueAlertSection');
+        if (overdueTasks.length > 0) {
+            overdueSection.style.display = 'block';
+            document.getElementById('overdueAlertList').innerHTML = overdueTasks.map(t => 
+                `<div style="background: #ffffff; padding: 12px 15px; border: 1px solid #fecaca; border-radius: 8px; font-size: 13px; display: flex; justify-content: space-between; align-items: center;">
+                    <div><i class="fa-solid fa-circle-exclamation" style="color: var(--danger); margin-right: 5px;"></i> <b>Task:</b> ${t.TASK} | <b style="color: var(--danger);">Due:</b> ${t.DATE_STR}</div>
+                    <div style="font-weight: 600; color: #475569;">Est: ${t['ESTIMATED HOURS']} hrs</div>
+                </div>`
+            ).join('');
+        } else {
+            overdueSection.style.display = 'none';
+        }
+
+        // Render Main Permanent Schedule Table
+        let tableHTML = '';
+        resourceData.forEach(d => {
+            let comp = isCompleted(d.STATUS);
+            let isInProgress = d.STATUS.toLowerCase().includes('progress');
+            let badgeClass = comp ? 'badge-completed' : (isInProgress ? 'badge-inprogress' : 'badge-notstarted');
+            let iconClass = comp ? 'fa-check' : (isInProgress ? 'fa-spinner' : 'fa-circle');
+            let isOverdue = !comp && parseDateObj(d.DATE_STR) && parseDateObj(d.DATE_STR) < today;
+
+            tableHTML += `
+                <tr class="${isOverdue ? 'row-overdue' : ''}">
+                    <td>${d.DATE_STR}</td>
+                    <td style="font-weight: 600; color: var(--primary);">${d.TASK} ${isOverdue ? '<span style="font-size:11px; background:#fee2e2; color:#ef4444; padding:2px 6px; border-radius:4px; margin-left:5px;"><i class="fa-solid fa-triangle-exclamation"></i> Overdue</span>' : ''}</td>
+                    <td><span class="category-tag">${d.Category}</span></td>
+                    <td style="font-weight: 600;">${d['ESTIMATED HOURS'].toFixed(1)} hrs</td>
+                    <td><span class="badge ${badgeClass}"><i class="fa-solid ${iconClass}"></i> ${d.STATUS}</span></td>
+                </tr>`;
+        });
+        document.getElementById('resourceTableBody').innerHTML = tableHTML || '<tr><td colspan="5" style="text-align:center; padding:30px; color:#94a3b8;">No tasks available</td></tr>';
+        document.getElementById('tableSectionTitle').innerHTML = `<i class="fa-solid fa-calendar-days"></i> ${selectedResource}'s Task Schedule View`;
     }
 
     window.onload = loadAllSheets;
