@@ -132,13 +132,16 @@
 </div>
 
 <script>
+    // REPLACE THIS URL WITH YOUR GOOGLE APPS SCRIPT WEB APP URL
+    const SCRIPT_URL = 'YOUR_APPS_SCRIPT_URL_HERE';
+
     const sheetsToFetch = [
         { name: 'Anjana', sheetId: '1w5vywPUV-W-y1P3egSx6xgfHzxi5pjGxP_OyU8rNHJw', gid: '927371423' },
         { name: 'Rumaisa', sheetId: '1thS7nWA0J-6CXKtONMpcusVoCqNof_spq_ZFocINXY4', gid: '927371423' }
     ];
 
     let rawData = [];
-    let currentFilter = 'all'; // 'all', 'completed', 'pending', 'overloaded'
+    let currentFilter = 'all';
 
     function categorize(task) {
         const t = String(task).toLowerCase();
@@ -194,18 +197,12 @@
 
         for (const sheet of sheetsToFetch) {
             try {
-                // Using allorigins proxy to bypass HTTPS / CORS restrictions seamlessly on GitHub Pages
-                const targetUrl = `https://docs.google.com/spreadsheets/d/${sheet.sheetId}/export?format=csv&gid=${sheet.gid}`;
-                const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(targetUrl)}`;
-                
-                const res = await fetch(proxyUrl);
+                const fetchUrl = `${SCRIPT_URL}?id=${sheet.sheetId}&gid=${sheet.gid}`;
+                const res = await fetch(fetchUrl);
                 if (!res.ok) throw new Error('Network response failed');
-                const data = await res.json();
-                
-                if (data && data.contents) {
-                    const rows = parseCSV(data.contents);
-                    processSheetRows(rows, sheet.name);
-                }
+                const text = await res.text();
+                const rows = parseCSV(text);
+                processSheetRows(rows, sheet.name);
             } catch (err) {
                 console.error(`Error loading sheet for ${sheet.name}:`, err);
             }
@@ -290,7 +287,6 @@
             return dt && dt < today;
         });
 
-        // Render Metric Cards
         document.getElementById('metricCardsContainer').innerHTML = `
             <div id="cardCompleted" class="metric-card success ${currentFilter === 'completed' ? 'active-filter' : ''}">
                 <div style="font-size: 11px; font-weight: bold; color: #7f8c8d; text-transform: uppercase;">Task Completion (Click)</div>
@@ -309,7 +305,6 @@
             </div>
         `;
 
-        // Bind click events explicitly
         document.getElementById('cardCompleted').onclick = function() {
             currentFilter = currentFilter === 'completed' ? 'all' : 'completed';
             renderResourceDashboard();
@@ -340,7 +335,6 @@
             overdueSection.style.display = 'none';
         }
 
-        // Filter table data
         let displayedTasks = resourceData;
         let filterTitleLabel = `${selectedResource}'s Task Schedule & Actual Hours Entry`;
         if (currentFilter === 'completed') {
