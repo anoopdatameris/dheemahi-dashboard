@@ -277,7 +277,6 @@
             let statusVal = (r[colStatus] && r[colStatus].trim() !== '') ? r[colStatus] : 'Not Started';
 
             rawData.push({
-                ROW_INDEX: i + 1,
                 SOURCE_SHEET: sheet.name,
                 SHEET_ID: sheet.sheetId,
                 GID: sheet.gid,
@@ -291,8 +290,7 @@
         }
     }
 
-    async function saveActualHours(sourceSheetName, rowIndex, sheetId, gid) {
-        const inputId = `act_${sourceSheetName}_${rowIndex}`;
+    async function saveActualHours(sourceSheetName, taskName, sheetId, gid, inputId) {
         const inputEl = document.getElementById(inputId);
         if (!inputEl) return;
 
@@ -303,20 +301,20 @@
             const response = await fetch(WEB_APP_URL, {
                 method: 'POST',
                 headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-                body: JSON.stringify({ id: sheetId, gid: gid, row: rowIndex, actualHours: val })
+                body: JSON.stringify({ id: sheetId, gid: gid, task: taskName, actualHours: val })
             });
 
             const result = await response.json();
 
             if (result.status === "success") {
-                let targetItem = rawData.find(d => d.SOURCE_SHEET === sourceSheetName && d.ROW_INDEX === rowIndex);
+                let targetItem = rawData.find(d => d.SOURCE_SHEET === sourceSheetName && d.TASK === taskName);
                 if (targetItem) {
                     targetItem['ACTUAL HOURS'] = val;
                 }
 
                 alert('✓ Actual hours successfully saved to Google Sheet!');
                 inputEl.disabled = false;
-                renderResourceDashboard();
+                loadAllSheets();
             } else {
                 throw new Error(result.message || "Unknown error");
             }
@@ -450,14 +448,16 @@
             overdueSection.style.display = 'none';
         }
 
-        // Render Main Permanent Schedule Table (Inputs are fully editable for ALL statuses including Completed)
+        // Render Main Permanent Schedule Table
         let tableHTML = '';
-        resourceData.forEach(d => {
+        resourceData.forEach((d, index) => {
             let comp = isCompleted(d.STATUS);
             let isInProgress = d.STATUS.toLowerCase().includes('progress');
             let badgeClass = comp ? 'badge-completed' : (isInProgress ? 'badge-inprogress' : 'badge-notstarted');
             let iconClass = comp ? 'fa-check' : (isInProgress ? 'fa-spinner' : 'fa-circle');
             let isOverdue = !comp && parseDateObj(d.DATE_STR) && parseDateObj(d.DATE_STR) < today;
+            let inputId = `act_${d.SOURCE_SHEET}_${index}`;
+            let safeTaskName = d.TASK.replace(/'/g, "\\'").replace(/"/g, '&quot;');
 
             tableHTML += `
                 <tr class="${isOverdue ? 'row-overdue' : ''}">
@@ -468,8 +468,8 @@
                     <td><span class="badge ${badgeClass}"><i class="fa-solid ${iconClass}"></i> ${d.STATUS}</span></td>
                     <td>
                         <div style="display: flex; gap: 8px; align-items: center;">
-                            <input type="number" step="0.5" id="act_${d.SOURCE_SHEET}_${d.ROW_INDEX}" class="hours-input" value="${d['ACTUAL HOURS'] > 0 ? d['ACTUAL HOURS'] : ''}" placeholder="Hrs">
-                            <button class="submit-btn" onclick="saveActualHours('${d.SOURCE_SHEET}', ${d.ROW_INDEX}, '${d.SHEET_ID}', '${d.GID}')"><i class="fa-solid fa-floppy-disk"></i> Save</button>
+                            <input type="number" step="0.5" id="${inputId}" class="hours-input" value="${d['ACTUAL HOURS'] > 0 ? d['ACTUAL HOURS'] : ''}" placeholder="Hrs">
+                            <button class="submit-btn" onclick="saveActualHours('${d.SOURCE_SHEET}', '${safeTaskName}', '${d.SHEET_ID}', '${d.GID}', '${inputId}')"><i class="fa-solid fa-floppy-disk"></i> Save</button>
                         </div>
                     </td>
                 </tr>`;
