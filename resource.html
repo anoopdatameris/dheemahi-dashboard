@@ -141,8 +141,6 @@
 </div>
 
 <script>
-    const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwQjXP8dMTZzeTKPZ8g5WTbToHfCjnUyn0D9vkfco012njFIN3AJw31pRM2ftMnjpI4/exec';
-
     const sheetsToFetch = [
         { name: 'Anjana', sheetId: '1w5vywPUV-W-y1P3egSx6xgfHzxi5pjGxP_OyU8rNHJw', gid: '927371423' },
         { name: 'Rumaisa', sheetId: '1thS7nWA0J-6CXKtONMpcusVoCqNof_spq_ZFocINXY4', gid: '927371423' }
@@ -205,7 +203,8 @@
 
         for (const sheet of sheetsToFetch) {
             try {
-                const fetchUrl = `${SCRIPT_URL}?id=${sheet.sheetId}&gid=${sheet.gid}`;
+                // Direct Google Sheets CSV export link
+                const fetchUrl = `https://docs.google.com/spreadsheets/d/${sheet.sheetId}/export?format=csv&gid=${sheet.gid}`;
                 const res = await fetch(fetchUrl);
                 if (!res.ok) throw new Error('Network response failed');
                 const text = await res.text();
@@ -322,7 +321,7 @@
             return dt && dt < today;
         });
 
-        // Render Metric Cards with direct inline onclick triggers
+        // Render Metric Cards
         document.getElementById('metricCardsContainer').innerHTML = `
             <div onclick="filterByCard('completed')" class="metric-card success ${activeCardFilter === 'completed' ? 'active-filter' : ''}">
                 <div style="font-size: 11px; font-weight: bold; color: #7f8c8d; text-transform: uppercase;">Task Completion (Click)</div>
@@ -341,7 +340,7 @@
             </div>
         `;
 
-        // Handle Card Inspection Section visibility and items
+        // Handle Card Inspection Section
         const inspectionSection = document.getElementById('cardInspectionSection');
         if (activeCardFilter) {
             inspectionSection.style.display = 'block';
@@ -382,7 +381,7 @@
             overdueSection.style.display = 'none';
         }
 
-        // Render Main Permanent Schedule Table (Locking inputs if completed)
+        // Render Main Permanent Schedule Table (Locking actual hours inputs if completed)
         let tableHTML = '';
         resourceData.forEach(d => {
             let comp = isCompleted(d.STATUS);
