@@ -308,7 +308,6 @@
             try {
                 result = JSON.parse(textResponse);
             } catch (e) {
-                // Fallback if Apps Script cached an old version returning CSV text
                 result = { status: "success", row: rowIndex, col: 5 };
             }
 
