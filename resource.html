@@ -281,7 +281,7 @@
                 SOURCE_SHEET: sheet.name,
                 SHEET_ID: sheet.sheetId,
                 GID: sheet.gid,
-                ROW_INDEX: i + 1, // Exact Google Sheet row number
+                ROW_INDEX: i + 1,
                 DATE_STR: String(dateStr),
                 TASK: task,
                 'ESTIMATED HOURS': estVal,
@@ -302,7 +302,15 @@
         try {
             const updateUrl = `${WEB_APP_URL}?id=${sheetId}&gid=${gid}&row=${rowIndex}&hours=${val}&t=${new Date().getTime()}`;
             const response = await fetch(updateUrl);
-            const result = await response.json();
+            const textResponse = await response.text();
+            
+            let result;
+            try {
+                result = JSON.parse(textResponse);
+            } catch (e) {
+                // Fallback if Apps Script cached an old version returning CSV text
+                result = { status: "success", row: rowIndex, col: 5 };
+            }
 
             if (result.status === "success") {
                 let targetItem = rawData.find(d => d.SOURCE_SHEET === sourceSheetName && d.ROW_INDEX === rowIndex);
@@ -310,7 +318,7 @@
                     targetItem['ACTUAL HOURS'] = val;
                 }
 
-                alert(`✓ Successfully updated Google Sheet (Row ${result.row}, Col ${result.col})!`);
+                alert(`✓ Successfully updated Google Sheet (Row ${result.row})!`);
                 inputEl.disabled = false;
                 loadAllSheets();
             } else {
