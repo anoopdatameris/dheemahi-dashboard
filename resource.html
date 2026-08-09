@@ -312,7 +312,7 @@
                     targetItem['ACTUAL HOURS'] = val;
                 }
 
-                alert('✓ Actual hours successfully saved to Google Sheet!');
+                alert(`✓ Actual hours successfully saved to Google Sheet! (Row: ${result.row}, Col: ${result.col})`);
                 inputEl.disabled = false;
                 loadAllSheets();
             } else {
@@ -320,7 +320,7 @@
             }
         } catch (err) {
             console.error('Error saving hours:', err);
-            alert('Failed to save actual hours to Google Sheet.');
+            alert('Failed to save actual hours to Google Sheet: ' + err.message);
             inputEl.disabled = false;
         }
     }
@@ -474,7 +474,7 @@
                     </td>
                 </tr>`;
         });
-        document.getElementById('resourceTableBody').innerHTML = tableHTML || '<tr><td colspan="6" style="text-align:center; padding:30px; color:#94a3b8;">No tasks available</td></tr>';
+        document.getElementById('resourceTableBody').innerHTML = tableHTML || '<tr><td colspan="6" style="text-align:center; padding:40px; color:#94a3b8;">No tasks available</td></tr>';
         document.getElementById('tableSectionTitle').innerHTML = `<i class="fa-solid fa-calendar-days"></i> ${selectedResource}'s Task Schedule & Actual Hours Entry`;
     }
 
