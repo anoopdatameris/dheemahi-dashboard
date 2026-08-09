@@ -132,7 +132,7 @@
 </div>
 
 <script>
-    const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwQjXP8dMTZzeTKPZ8g5WTbToHfCjnUyn0D9vkfco012njFIN3AJw31pRM2ftMnjpI4/exec'; // Your web app URL
+    const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwQjXP8dMTZzeTKPZ8g5WTbToHfCjnUyn0D9vkfco012njFIN3AJw31pRM2ftMnjpI4/exec';
 
     const sheetsToFetch = [
         { name: 'Anjana', sheetId: '1w5vywPUV-W-y1P3egSx6xgfHzxi5pjGxP_OyU8rNHJw', gid: '927371423' },
@@ -216,7 +216,6 @@
     function processSheetRows(rows, sourceName) {
         if (!rows || rows.length < 2) return;
         
-        // Dynamic column detector based on header row
         let header = rows[0].map(h => h.toLowerCase());
         let colDate = header.findIndex(h => h.includes('date'));
         let colTask = header.findIndex(h => h.includes('task') || h.includes('activity'));
@@ -224,7 +223,6 @@
         let colAct = header.findIndex(h => h.includes('act') || h.includes('actual'));
         let colStatus = header.findIndex(h => h.includes('status') || h.includes('state'));
 
-        // Fallback defaults if headers don't match exactly
         if (colDate === -1) colDate = 0;
         if (colTask === -1) colTask = 1;
         if (colEst === -1) colEst = 3;
