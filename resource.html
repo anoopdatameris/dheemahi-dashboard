@@ -301,20 +301,25 @@
         
         try {
             const saveUrl = `${WEB_APP_URL}?id=${sheetId}&gid=${gid}&row=${rowIndex}&actualHours=${val}`;
-            await fetch(saveUrl, { method: 'GET', mode: 'no-cors' });
+            
+            const response = await fetch(saveUrl);
+            const result = await response.json();
 
-            // Instantly update local dataset so the UI keeps the new value without waiting on Google's CSV cache
-            let targetItem = rawData.find(d => d.SOURCE_SHEET === sourceSheetName && d.ROW_INDEX === rowIndex);
-            if (targetItem) {
-                targetItem['ACTUAL HOURS'] = val;
+            if (result.status === "success") {
+                let targetItem = rawData.find(d => d.SOURCE_SHEET === sourceSheetName && d.ROW_INDEX === rowIndex);
+                if (targetItem) {
+                    targetItem['ACTUAL HOURS'] = val;
+                }
+
+                alert('✓ Actual hours successfully saved to Google Sheet!');
+                inputEl.disabled = false;
+                renderResourceDashboard();
+            } else {
+                throw new Error(result.message || "Unknown error");
             }
-
-            alert('✓ Actual hours successfully saved!');
-            inputEl.disabled = false;
-            renderResourceDashboard(); // Re-render instantly with local data
         } catch (err) {
             console.error('Error saving hours:', err);
-            alert('Failed to save actual hours.');
+            alert('Failed to save actual hours to Google Sheet.');
             inputEl.disabled = false;
         }
     }
