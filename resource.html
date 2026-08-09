@@ -1,0 +1,311 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dheemahi Ayur — Resource Execution Dashboard</title>
+    <style>
+        :root {
+            --primary: #2c3e50;
+            --accent: #3498db;
+            --success: #2ecc71;
+            --warning: #e67e22;
+            --danger: #e74c3c;
+            --bg: #f8f9fa;
+            --card-bg: #ffffff;
+            --text: #333333;
+            --border: #e1e8ed;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: var(--bg);
+            color: var(--text);
+            margin: 0;
+            padding: 20px;
+        }
+
+        .container { max-width: 1200px; margin: 0 auto; }
+        header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; flex-wrap: wrap; gap: 15px; }
+        h1 { font-size: 22px; color: var(--primary); margin: 0; }
+
+        .resource-selector-bar {
+            background: var(--card-bg); padding: 15px; border-radius: 8px; border: 1px solid var(--border);
+            margin-bottom: 20px; display: flex; align-items: center; gap: 15px;
+        }
+        .resource-selector-bar label { font-size: 12px; font-weight: bold; color: #7f8c8d; text-transform: uppercase; }
+        select { padding: 8px 12px; border: 1px solid var(--border); border-radius: 4px; font-size: 14px; font-weight: 600; color: var(--primary); background: #fff; }
+
+        .dashboard-section {
+            background: var(--card-bg); padding: 20px; border-radius: 8px; border: 1px solid var(--border);
+            margin-bottom: 20px; box-shadow: 0 1px 3px rgba(0,0,0,0.02);
+        }
+        .section-header { font-size: 15px; font-weight: bold; color: var(--primary); margin-bottom: 5px; border-bottom: 2px solid var(--border); padding-bottom: 8px; }
+        .section-sub { font-size: 12px; color: #7f8c8d; margin-bottom: 15px; }
+
+        .grid-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 15px; }
+        .metric-card { background: #f8f9fa; padding: 15px; border-radius: 6px; border-left: 4px solid var(--accent); }
+        .metric-card.warning { border-left-color: var(--warning); }
+        .metric-card.danger { border-left-color: var(--danger); }
+        .metric-card.success { border-left-color: var(--success); }
+
+        .table-responsive { background: var(--card-bg); border-radius: 8px; border: 1px solid var(--border); overflow-x: auto; }
+        table { width: 100%; border-collapse: collapse; text-align: left; font-size: 14px; }
+        th { background: #f4f6f8; padding: 12px 15px; font-weight: 600; color: var(--primary); border-bottom: 1px solid var(--border); }
+        td { padding: 12px 15px; border-bottom: 1px solid var(--border); color: var(--text); }
+        tbody tr:hover { background-color: #f1f5f9; }
+        tr:last-child td { border-bottom: none; }
+
+        tr.row-overdue { background-color: #fdf2f2 !important; border-left: 4px solid var(--danger); }
+        .badge { padding: 4px 8px; border-radius: 4px; font-size: 11px; font-weight: bold; text-transform: uppercase; }
+        .badge-completed { background: #e8f8f5; color: var(--success); }
+        .badge-inprogress { background: #fef9e7; color: var(--warning); }
+        .badge-notstarted { background: #fdedec; color: var(--danger); }
+
+        .hours-input { width: 60px; padding: 5px; border: 1px solid var(--border); border-radius: 4px; text-align: center; }
+        .submit-btn { padding: 5px 10px; background: var(--accent); color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 12px; font-weight: 600; }
+        .submit-btn:hover { background: #2980b9; }
+        .sync-badge { font-size: 12px; font-weight: normal; color: var(--success); }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <header>
+        <div>
+            <h1>Dheemahi Ayur — Resource Execution Dashboard</h1>
+            <span id="syncStatus" class="sync-badge">(Syncing sheets...)</span>
+        </div>
+        <div>
+            <a href="index.html" style="margin-right: 15px; text-decoration: none; color: var(--accent); font-weight: 600; font-size: 14px;">← Back to Combined Dashboard</a>
+            <button onclick="loadAllSheets()" style="padding: 8px 15px; background: #fff; border: 1px solid var(--border); border-radius: 4px; cursor: pointer; font-weight: 600;">Refresh Data</button>
+        </div>
+    </header>
+
+    <div class="resource-selector-bar">
+        <label for="resourceSelect">Select Resource View:</label>
+        <select id="resourceSelect" onchange="renderResourceDashboard()">
+            <!-- Populated dynamically -->
+        </select>
+    </div>
+
+    <div class="dashboard-section">
+        <div class="section-header" id="statusHeaderTitle">Workload & Capacity Overview</div>
+        <div class="section-sub">Daily workload health and schedule metrics for selected team member</div>
+        <div class="grid-cards" id="metricCardsContainer"></div>
+    </div>
+
+    <div class="dashboard-section" id="overdueAlertSection" style="display: none;">
+        <div class="section-header" style="color: var(--danger);">⚠️ Overdue Tasks Alert</div>
+        <div class="section-sub">The following tasks are past their due date and require immediate attention</div>
+        <div id="overdueAlertList" style="display: flex; flex-direction: column; gap: 8px;"></div>
+    </div>
+
+    <div class="dashboard-section" style="padding: 0; overflow: hidden;">
+        <div style="padding: 15px 20px; border-bottom: 1px solid var(--border);">
+            <div class="section-header" style="margin: 0; border: none; padding: 0;" id="tableSectionTitle">Assigned Task Schedule & Actual Hours Entry</div>
+        </div>
+        <div class="table-responsive">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Date</th>
+                        <th>Task Name</th>
+                        <th>Category</th>
+                        <th>Est. Hours</th>
+                        <th>Status</th>
+                        <th>Log Actual Hours</th>
+                    </tr>
+                </thead>
+                <tbody id="resourceTableBody">
+                    <tr><td colspan="6" style="text-align:center; padding:30px; color:#95a5a6;">Loading data...</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<script>
+    const sheetsToFetch = [
+        { name: 'Anjana', sheetId: '1w5vywPUV-W-y1P3egSx6xgfHzxi5pjGxP_OyU8rNHJw', gid: '927371423' },
+        { name: 'Rumaisa', sheetId: '1thS7nWA0J-6CXKtONMpcusVoCqNof_spq_ZFocINXY4', gid: '927371423' }
+    ];
+
+    let rawData = [];
+    let loadedCount = 0;
+
+    function categorize(task) {
+        const t = String(task).toLowerCase();
+        if (['seo', 'serp', 'meta', 'h1', 'alt', 'noindex', 'link', 'image'].some(k => t.includes(k))) return 'On-Page SEO';
+        if (t.includes('directory') || t.includes('directories')) return 'Directory Submissions';
+        if (t.includes('reel')) return 'Social Media / Reel';
+        if (t.includes('meeting')) return 'Management & Meetings';
+        if (t.includes('spam') || t.includes('security')) return 'Security & Audit';
+        return 'Other';
+    }
+
+    function parseDateObj(dateStr) {
+        if (!dateStr) return null;
+        let parts = dateStr.split('-');
+        if (parts.length === 3) {
+            let months = {'Jan':0,'Feb':1,'Mar':2,'Apr':3,'May':4,'Jun':5,'Jul':6,'Aug':7,'Sep':8,'Oct':9,'Nov':10,'Dec':11};
+            let d = parseInt(parts[0]);
+            let m = months[parts[1]];
+            let y = parseInt(parts[2]);
+            if (!isNaN(d) && m !== undefined && !isNaN(y)) return new Date(y, m, d);
+        }
+        return null;
+    }
+
+    function loadAllSheets() {
+        rawData = [];
+        loadedCount = 0;
+        document.getElementById('syncStatus').innerText = '(Syncing sheets...)';
+        document.getElementById('syncStatus').style.color = '#3498db';
+
+        sheetsToFetch.forEach(sheet => {
+            let script = document.createElement('script');
+            script.src = `https://docs.google.com/spreadsheets/d/${sheet.sheetId}/gviz/tq?gid=${sheet.gid}&tqx=out:json;responseHandler=handle${sheet.name}`;
+            document.body.appendChild(script);
+        });
+    }
+
+    function handleDataResponse(response, sourceName) {
+        if (response && response.table && response.table.rows) {
+            const rows = response.table.rows;
+            let colMap = { date: 0, task: 1, est: 3, act: 4, status: 8 };
+
+            rows.forEach((r, rowIndex) => {
+                let c = r.c;
+                if (!c) return;
+                let task = (c[colMap.task] && c[colMap.task].v) ? String(c[colMap.task].v) : '';
+                if (!task || task.toLowerCase() === 'sunday') return;
+
+                let dateStr = '';
+                if (c[colMap.date]) {
+                    dateStr = c[colMap.date].f || c[colMap.date].v || '';
+                    if (String(dateStr).includes('Date(')) {
+                        let parts = String(dateStr).match(/\d+/g);
+                        if (parts && parts.length >= 3) {
+                            let months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+                            dateStr = `${String(parts[2]).padStart(2, '0')}-${months[parseInt(parts[1])]}-${parts[0]}`;
+                        }
+                    }
+                }
+
+                rawData.push({
+                    ROW_INDEX: rowIndex + 2,
+                    SOURCE_SHEET: sourceName,
+                    DATE_STR: String(dateStr),
+                    TASK: task,
+                    'ESTIMATED HOURS': c[colMap.est] ? parseFloat(c[colMap.est].v) || 0 : 0,
+                    'ACTUAL HOURS': c[colMap.act] ? parseFloat(c[colMap.act].v) || 0 : 0,
+                    STATUS: c[colMap.status] && c[colMap.status].v ? String(c[colMap.status].v) : 'Not Started',
+                    Category: categorize(task)
+                });
+            });
+        }
+
+        loadedCount++;
+        if (loadedCount === sheetsToFetch.length) {
+            document.getElementById('syncStatus').innerText = `✓ Synced Sheets Successfully`;
+            document.getElementById('syncStatus').style.color = '#2ecc71';
+            buildResourceSelector();
+            renderResourceDashboard();
+        }
+    }
+
+    window.handleAnjana = function(res) { handleDataResponse(res, 'Anjana'); };
+    window.handleRumaisa = function(res) { handleDataResponse(res, 'Rumaisa'); };
+
+    function buildResourceSelector() {
+        const selectEl = document.getElementById('resourceSelect');
+        selectEl.innerHTML = sheetsToFetch.map(s => `<option value="${s.name}">👤 ${s.name}</option>`).join('');
+    }
+
+    function renderResourceDashboard() {
+        const selectedResource = document.getElementById('resourceSelect').value;
+        const filtered = rawData.filter(d => d.SOURCE_SHEET === selectedResource);
+
+        const totalTasks = filtered.length;
+        const completedTasks = filtered.filter(d => d.STATUS === 'Completed').length;
+        const totalHours = filtered.reduce((sum, d) => sum + d['ESTIMATED HOURS'], 0);
+        const completedHours = filtered.filter(d => d.STATUS === 'Completed').reduce((sum, d) => sum + d['ESTIMATED HOURS'], 0);
+        const remainingCapacity = totalHours - completedHours;
+        const completionPct = totalTasks > 0 ? ((completedTasks / totalTasks) * 100).toFixed(1) : 0;
+
+        let dateMap = {};
+        filtered.forEach(d => { dateMap[d.DATE_STR] = (dateMap[d.DATE_STR] || 0) + d['ESTIMATED HOURS']; });
+        
+        let overloadedDaysCount = 0;
+        for (let dt in dateMap) {
+            if (dateMap[dt] > 7) overloadedDaysCount++;
+        }
+
+        let today = new Date();
+        today.setHours(0,0,0,0);
+        let overdueTasks = filtered.filter(d => {
+            if (d.STATUS === 'Completed') return false;
+            let dt = parseDateObj(d.DATE_STR);
+            return dt && dt < today;
+        });
+
+        document.getElementById('metricCardsContainer').innerHTML = `
+            <div class="metric-card success">
+                <div style="font-size: 11px; font-weight: bold; color: #7f8c8d; text-transform: uppercase;">Task Completion</div>
+                <div style="font-size: 24px; font-weight: bold; color: var(--primary); margin: 4px 0;">${completionPct}%</div>
+                <div style="font-size: 12px; color: #555;">${completedTasks} of ${totalTasks} tasks done</div>
+            </div>
+            <div class="metric-card">
+                <div style="font-size: 11px; font-weight: bold; color: #7f8c8d; text-transform: uppercase;">Remaining Capacity</div>
+                <div style="font-size: 24px; font-weight: bold; color: var(--danger); margin: 4px 0;">${remainingCapacity.toFixed(1)} hrs</div>
+                <div style="font-size: 12px; color: #555;">Pending effort hours</div>
+            </div>
+            <div class="metric-card ${overloadedDaysCount > 0 ? 'warning' : 'success'}">
+                <div style="font-size: 11px; font-weight: bold; color: #7f8c8d; text-transform: uppercase;">Overloaded Days (>7 hrs)</div>
+                <div style="font-size: 24px; font-weight: bold; color: var(--primary); margin: 4px 0;">${overloadedDaysCount} Day(s)</div>
+                <div style="font-size: 12px; color: #555;">Heavy workload periods</div>
+            </div>
+        `;
+
+        const overdueSection = document.getElementById('overdueAlertSection');
+        if (overdueTasks.length > 0) {
+            overdueSection.style.display = 'block';
+            document.getElementById('overdueAlertList').innerHTML = overdueTasks.map(t => 
+                `<div style="background: #fff; padding: 10px; border: 1px solid var(--danger); border-radius: 4px; font-size: 13px;">
+                    <b>Task:</b> ${t.TASK} | <b>Due Date:</b> ${t.DATE_STR} | <b>Est:</b> ${t['ESTIMATED HOURS']} hrs
+                </div>`
+            ).join('');
+        } else {
+            overdueSection.style.display = 'none';
+        }
+
+        let tableHTML = '';
+        filtered.forEach(d => {
+            let badgeClass = d.STATUS === 'Completed' ? 'badge-completed' : (d.STATUS === 'In-Progress' ? 'badge-inprogress' : 'badge-notstarted');
+            let isOverdue = d.STATUS !== 'Completed' && parseDateObj(d.DATE_STR) && parseDateObj(d.DATE_STR) < today;
+
+            tableHTML += `
+                <tr class="${isOverdue ? 'row-overdue' : ''}">
+                    <td>${d.DATE_STR}</td>
+                    <td style="font-weight: 600;">${d.TASK} ${isOverdue ? '⚠️ <span style="font-size:11px; color:var(--danger);">(Overdue)</span>' : ''}</td>
+                    <td><span style="background: #f0f3f6; padding: 2px 6px; border-radius: 3px; font-size: 12px;">${d.Category}</span></td>
+                    <td>${d['ESTIMATED HOURS'].toFixed(1)} hrs</td>
+                    <td><span class="badge ${badgeClass}">${d.STATUS}</span></td>
+                    <td>
+                        <div style="display: flex; gap: 6px; align-items: center;">
+                            <input type="number" step="0.5" id="act_${d.SOURCE_SHEET}_${d.ROW_INDEX}" class="hours-input" value="${d['ACTUAL HOURS'] > 0 ? d['ACTUAL HOURS'] : ''}" placeholder="Hrs">
+                            <button class="submit-btn" onclick="alert('Actual hours input simulation active.')">Save</button>
+                        </div>
+                    </td>
+                </tr>`;
+        });
+        document.getElementById('resourceTableBody').innerHTML = tableHTML || '<tr><td colspan="6" style="text-align:center; padding:20px; color:#95a5a6;">No tasks found</td></tr>';
+        document.getElementById('tableSectionTitle').innerText = `${selectedResource}'s Task Schedule & Actual Hours Entry`;
+    }
+
+    window.onload = loadAllSheets;
+</script>
+
+</body>
+</html>
