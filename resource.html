@@ -300,7 +300,6 @@
         inputEl.disabled = true;
         
         try {
-            // Send data cleanly via POST request payload to doPost(e)
             const response = await fetch(WEB_APP_URL, {
                 method: 'POST',
                 headers: { 'Content-Type': 'text/plain;charset=utf-8' },
@@ -451,7 +450,7 @@
             overdueSection.style.display = 'none';
         }
 
-        // Render Main Permanent Schedule Table
+        // Render Main Permanent Schedule Table (Inputs are fully editable for ALL statuses including Completed)
         let tableHTML = '';
         resourceData.forEach(d => {
             let comp = isCompleted(d.STATUS);
@@ -469,13 +468,13 @@
                     <td><span class="badge ${badgeClass}"><i class="fa-solid ${iconClass}"></i> ${d.STATUS}</span></td>
                     <td>
                         <div style="display: flex; gap: 8px; align-items: center;">
-                            <input type="number" step="0.5" id="act_${d.SOURCE_SHEET}_${d.ROW_INDEX}" class="hours-input" value="${d['ACTUAL HOURS'] > 0 ? d['ACTUAL HOURS'] : ''}" placeholder="Hrs" ${comp ? 'disabled style="background:#f1f5f9; color:#94a3b8; cursor:not-allowed;"' : ''}>
-                            <button class="submit-btn" ${comp ? 'disabled style="background:#cbd5e1; cursor:not-allowed;"' : ''} onclick="saveActualHours('${d.SOURCE_SHEET}', ${d.ROW_INDEX}, '${d.SHEET_ID}', '${d.GID}')"><i class="fa-solid fa-floppy-disk"></i> Save</button>
+                            <input type="number" step="0.5" id="act_${d.SOURCE_SHEET}_${d.ROW_INDEX}" class="hours-input" value="${d['ACTUAL HOURS'] > 0 ? d['ACTUAL HOURS'] : ''}" placeholder="Hrs">
+                            <button class="submit-btn" onclick="saveActualHours('${d.SOURCE_SHEET}', ${d.ROW_INDEX}, '${d.SHEET_ID}', '${d.GID}')"><i class="fa-solid fa-floppy-disk"></i> Save</button>
                         </div>
                     </td>
                 </tr>`;
         });
-        document.getElementById('resourceTableBody').innerHTML = tableHTML || '<tr><td colspan="6" style="text-align:center; padding:40px; color:#94a3b8;">No tasks available</td></tr>';
+        document.getElementById('resourceTableBody').innerHTML = tableHTML || '<tr><td colspan="6" style="text-align:center; padding:30px; color:#94a3b8;">No tasks available</td></tr>';
         document.getElementById('tableSectionTitle').innerHTML = `<i class="fa-solid fa-calendar-days"></i> ${selectedResource}'s Task Schedule & Actual Hours Entry`;
     }
 
