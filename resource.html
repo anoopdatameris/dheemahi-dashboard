@@ -105,6 +105,9 @@
 </head>
 <body>
 
+<!-- Hidden iframe for background form submission without page reload -->
+<iframe name="hidden_iframe" id="hidden_iframe" style="display:none;"></iframe>
+
 <div class="container">
     <header>
         <h1><i class="fa-solid fa-chart-line"></i> Dheemahi Ayur — Resource Execution Dashboard</h1>
@@ -291,37 +294,45 @@
         }
     }
 
-    async function saveActualHours(sourceSheetName, taskName, sheetId, gid, inputId) {
+    function saveActualHours(sourceSheetName, taskName, sheetId, gid, inputId) {
         const inputEl = document.getElementById(inputId);
         if (!inputEl) return;
 
         const val = parseFloat(inputEl.value) || 0;
-        inputEl.disabled = true;
         
-        try {
-            const updateUrl = `${WEB_APP_URL}?id=${sheetId}&gid=${gid}&hours=${val}&t=${new Date().getTime()}`;
-            const response = await fetch(updateUrl);
-            const textResponse = await response.text();
-            
-            let result;
-            try {
-                result = JSON.parse(textResponse);
-            } catch (e) {
-                result = { status: "success", row: 13, col: 5 };
-            }
+        // Create a hidden native form submission targeting the iframe (Zero CORS/Fetch errors)
+        const form = document.createElement('form');
+        form.method = 'GET';
+        form.action = WEB_APP_URL;
+        form.target = 'hidden_iframe';
 
-            if (result.status === "success") {
-                alert(`✓ Successfully updated Row 13 in Google Sheet!`);
-                inputEl.disabled = false;
-                loadAllSheets();
-            } else {
-                throw new Error("Unknown error");
-            }
-        } catch (err) {
-            console.error('Error saving hours:', err);
-            alert('Failed to save actual hours to Google Sheet: ' + err.message);
-            inputEl.disabled = false;
+        const inputs = {
+            id: sheetId,
+            gid: gid,
+            task: taskName,
+            hours: val
+        };
+
+        for (let key in inputs) {
+            const hiddenField = document.createElement('input');
+            hiddenField.type = 'hidden';
+            hiddenField.name = key;
+            hiddenField.value = inputs[key];
+            form.appendChild(hiddenField);
         }
+
+        document.body.appendChild(form);
+        form.submit();
+        document.body.removeChild(form);
+
+        alert(`✓ Submitted actual hours to Google Sheet!`);
+        
+        let targetItem = rawData.find(d => d.SOURCE_SHEET === sourceSheetName && d.TASK === taskName);
+        if (targetItem) {
+            targetItem['ACTUAL HOURS'] = val;
+        }
+        
+        setTimeout(loadAllSheets, 1500); // Refresh after 1.5s to pull updated sheet data
     }
 
     function buildResourceSelector() {
