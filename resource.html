@@ -252,11 +252,13 @@
         if (!rows || rows.length < 2) return;
         
         let header = rows[0].map(h => h.toLowerCase());
+        
+        // Flexible column mapping with fallback defaults (Col A=0, Col B=1, Col D=3, Col E=4, Col I=8)
         let colDate = header.findIndex(h => h.includes('date'));
-        let colTask = header.findIndex(h => h.includes('task') || h.includes('activity'));
+        let colTask = header.findIndex(h => h.includes('task') || h.includes('activity') || h.includes('work'));
         let colEst = header.findIndex(h => h.includes('est') || h.includes('planned') || h.includes('hour'));
         let colAct = header.findIndex(h => h.includes('act') || h.includes('actual'));
-        let colStatus = header.findIndex(h => h.includes('status') || h.includes('state'));
+        let colStatus = header.findIndex(h => h.includes('status') || h.includes('state') || h.includes('progress'));
 
         if (colDate === -1) colDate = 0;
         if (colTask === -1) colTask = 1;
@@ -269,7 +271,7 @@
             if (!r || r.length <= colTask) continue;
 
             let task = r[colTask] || '';
-            if (!task || task.toLowerCase() === 'sunday' || task.toLowerCase() === 'task name') continue;
+            if (!task || task.toLowerCase() === 'sunday' || task.toLowerCase() === 'task name' || task.toLowerCase() === 'task') continue;
 
             let dateStr = r[colDate] || '';
             let estVal = parseFloat(r[colEst]) || 0;
