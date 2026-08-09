@@ -132,7 +132,7 @@
 </div>
 
 <script>
-    const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwWa3AZVARFDrPKsjZzEoMYbQEukAUy4LtXGjYAl0iryLHF47sy_jK_DxcTUIOjyOL7/exec';
+    const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwQjXP8dMTZzeTKPZ8g5WTbToHfCjnUyn0D9vkfco012njFIN3AJw31pRM2ftMnjpI4/exec';
 
     const sheetsToFetch = [
         { name: 'Anjana', sheetId: '1w5vywPUV-W-y1P3egSx6xgfHzxi5pjGxP_OyU8rNHJw', gid: '927371423' },
@@ -207,7 +207,7 @@
             }
         }
 
-        document.getElementById('syncStatus').innerText = `✓ Synced Sheets Successfully (${rawData.length} rows loaded)`;
+        document.getElementById('syncStatus').innerText = `✓ Synced Successfully (${rawData.length} rows)`;
         document.getElementById('syncStatus').style.color = '#2ecc71';
         buildResourceSelector();
         renderResourceDashboard();
@@ -234,7 +234,7 @@
             if (!r || r.length <= colTask) continue;
 
             let task = r[colTask] || '';
-            if (!task || task.toLowerCase() === 'sunday') continue;
+            if (!task || task.toLowerCase() === 'sunday' || task.toLowerCase() === 'task name') continue;
 
             let dateStr = r[colDate] || '';
             let estVal = parseFloat(r[colEst]) || 0;
@@ -271,9 +271,9 @@
         const resourceData = rawData.filter(d => d.SOURCE_SHEET === selectedResource);
 
         const totalTasks = resourceData.length;
-        const completedTasks = resourceData.filter(d => d.STATUS.toLowerCase().includes('complete')).length;
+        const completedTasks = resourceData.filter(d => d.STATUS.toLowerCase().includes('complet') || d.STATUS.toLowerCase() === 'done' || d.STATUS.toLowerCase() === 'yes').length;
         const totalHours = resourceData.reduce((sum, d) => sum + d['ESTIMATED HOURS'], 0);
-        const completedHours = resourceData.filter(d => d.STATUS.toLowerCase().includes('complete')).reduce((sum, d) => sum + d['ESTIMATED HOURS'], 0);
+        const completedHours = resourceData.filter(d => d.STATUS.toLowerCase().includes('complet') || d.STATUS.toLowerCase() === 'done' || d.STATUS.toLowerCase() === 'yes').reduce((sum, d) => sum + d['ESTIMATED HOURS'], 0);
         const remainingCapacity = totalHours - completedHours;
         const completionPct = totalTasks > 0 ? ((completedTasks / totalTasks) * 100).toFixed(1) : 0;
 
@@ -292,7 +292,8 @@
         let today = new Date();
         today.setHours(0,0,0,0);
         let overdueTasks = resourceData.filter(d => {
-            if (d.STATUS.toLowerCase().includes('complete')) return false;
+            let isComp = d.STATUS.toLowerCase().includes('complet') || d.STATUS.toLowerCase() === 'done' || d.STATUS.toLowerCase() === 'yes';
+            if (isComp) return false;
             let dt = parseDateObj(d.DATE_STR);
             return dt && dt < today;
         });
@@ -347,11 +348,12 @@
 
         let displayedTasks = resourceData;
         let filterTitleLabel = `${selectedResource}'s Task Schedule & Actual Hours Entry`;
+        
         if (currentFilter === 'completed') {
-            displayedTasks = resourceData.filter(d => d.STATUS.toLowerCase().includes('complete'));
+            displayedTasks = resourceData.filter(d => d.STATUS.toLowerCase().includes('complet') || d.STATUS.toLowerCase() === 'done' || d.STATUS.toLowerCase() === 'yes');
             filterTitleLabel = `${selectedResource}'s Completed Tasks (Filtered)`;
         } else if (currentFilter === 'pending') {
-            displayedTasks = resourceData.filter(d => !d.STATUS.toLowerCase().includes('complete'));
+            displayedTasks = resourceData.filter(d => !(d.STATUS.toLowerCase().includes('complet') || d.STATUS.toLowerCase() === 'done' || d.STATUS.toLowerCase() === 'yes'));
             filterTitleLabel = `${selectedResource}'s Pending Effort Tasks (Filtered)`;
         } else if (currentFilter === 'overloaded') {
             displayedTasks = resourceData.filter(d => overloadedDates.includes(d.DATE_STR));
@@ -360,7 +362,7 @@
 
         let tableHTML = '';
         displayedTasks.forEach(d => {
-            let isCompleted = d.STATUS.toLowerCase().includes('complete');
+            let isCompleted = d.STATUS.toLowerCase().includes('complet') || d.STATUS.toLowerCase() === 'done' || d.STATUS.toLowerCase() === 'yes';
             let isInProgress = d.STATUS.toLowerCase().includes('progress');
             let badgeClass = isCompleted ? 'badge-completed' : (isInProgress ? 'badge-inprogress' : 'badge-notstarted');
             let isOverdue = !isCompleted && parseDateObj(d.DATE_STR) && parseDateObj(d.DATE_STR) < today;
@@ -380,7 +382,7 @@
                     </td>
                 </tr>`;
         });
-        document.getElementById('resourceTableBody').innerHTML = tableHTML || '<tr><td colspan="6" style="text-align:center; padding:20px; color:#95a5a6;">No tasks match this filter view</td></tr>';
+        document.getElementById('resourceTableBody').innerHTML = tableHTML || '<tr><td colspan="6" style="text-align:center; padding:30px; color:#95a5a6;">No tasks match this filter view</td></tr>';
         document.getElementById('tableSectionTitle').innerText = filterTitleLabel;
     }
 
