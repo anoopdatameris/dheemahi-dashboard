@@ -169,6 +169,8 @@
 </div>
 
 <script>
+    const WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbwQjXP8dMTZzeTKPZ8g5WTbToHfCjnUyn0D9vkfco012njFIN3AJw31pRM2ftMnjpI4/exec';
+
     const sheetsToFetch = [
         { name: 'Anjana', sheetId: '1w5vywPUV-W-y1P3egSx6xgfHzxi5pjGxP_OyU8rNHJw', gid: '927371423' },
         { name: 'Rumaisa', sheetId: '1thS7nWA0J-6CXKtONMpcusVoCqNof_spq_ZFocINXY4', gid: '927371423' }
@@ -230,12 +232,12 @@
 
         for (const sheet of sheetsToFetch) {
             try {
-                const fetchUrl = `https://docs.google.com/spreadsheets/d/${sheet.sheetId}/export?format=csv&gid=${sheet.gid}`;
+                const fetchUrl = `${WEB_APP_URL}?id=${sheet.sheetId}&gid=${sheet.gid}`;
                 const res = await fetch(fetchUrl);
                 if (!res.ok) throw new Error('Network response failed');
                 const text = await res.text();
                 const rows = parseCSV(text);
-                processSheetRows(rows, sheet.name);
+                processSheetRows(rows, sheet);
             } catch (err) {
                 console.error(`Error loading sheet for ${sheet.name}:`, err);
             }
@@ -246,7 +248,7 @@
         renderResourceDashboard();
     }
 
-    function processSheetRows(rows, sourceName) {
+    function processSheetRows(rows, sheet) {
         if (!rows || rows.length < 2) return;
         
         let header = rows[0].map(h => h.toLowerCase());
@@ -276,7 +278,9 @@
 
             rawData.push({
                 ROW_INDEX: i + 1,
-                SOURCE_SHEET: sourceName,
+                SOURCE_SHEET: sheet.name,
+                SHEET_ID: sheet.sheetId,
+                GID: sheet.gid,
                 DATE_STR: String(dateStr),
                 TASK: task,
                 'ESTIMATED HOURS': estVal,
@@ -284,6 +288,27 @@
                 STATUS: statusVal,
                 Category: categorize(task)
             });
+        }
+    }
+
+    async function saveActualHours(sourceSheetName, rowIndex, sheetId, gid) {
+        const inputId = `act_${sourceSheetName}_${rowIndex}`;
+        const inputEl = document.getElementById(inputId);
+        if (!inputEl) return;
+
+        const val = parseFloat(inputEl.value) || 0;
+        inputEl.disabled = true;
+        
+        try {
+            const saveUrl = `${WEB_APP_URL}?id=${sheetId}&gid=${gid}&row=${rowIndex}&actualHours=${val}`;
+            await fetch(saveUrl, { method: 'GET', mode: 'no-cors' });
+
+            alert('✓ Actual hours successfully saved to Google Sheet!');
+            loadAllSheets();
+        } catch (err) {
+            console.error('Error saving hours:', err);
+            alert('Failed to save actual hours.');
+            inputEl.disabled = false;
         }
     }
 
@@ -429,7 +454,7 @@
                     <td>
                         <div style="display: flex; gap: 8px; align-items: center;">
                             <input type="number" step="0.5" id="act_${d.SOURCE_SHEET}_${d.ROW_INDEX}" class="hours-input" value="${d['ACTUAL HOURS'] > 0 ? d['ACTUAL HOURS'] : ''}" placeholder="Hrs" ${comp ? 'disabled style="background:#f1f5f9; color:#94a3b8; cursor:not-allowed;"' : ''}>
-                            <button class="submit-btn" ${comp ? 'disabled style="background:#cbd5e1; cursor:not-allowed;"' : ''} onclick="alert('Actual hours saved successfully.')"><i class="fa-solid fa-floppy-disk"></i> Save</button>
+                            <button class="submit-btn" ${comp ? 'disabled style="background:#cbd5e1; cursor:not-allowed;"' : ''} onclick="saveActualHours('${d.SOURCE_SHEET}', ${d.ROW_INDEX}, '${d.SHEET_ID}', '${d.GID}')"><i class="fa-solid fa-floppy-disk"></i> Save</button>
                         </div>
                     </td>
                 </tr>`;
