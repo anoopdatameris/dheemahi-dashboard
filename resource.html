@@ -232,7 +232,7 @@
 
         for (const sheet of sheetsToFetch) {
             try {
-                const fetchUrl = `${WEB_APP_URL}?gid=${sheet.gid}&t=${new Date().getTime()}`;
+                const fetchUrl = `${WEB_APP_URL}?id=${sheet.sheetId}&gid=${sheet.gid}&t=${new Date().getTime()}`;
                 const res = await fetch(fetchUrl);
                 if (!res.ok) throw new Error('Network response failed');
                 const text = await res.text();
@@ -298,7 +298,7 @@
         inputEl.disabled = true;
         
         try {
-            const updateUrl = `${WEB_APP_URL}?gid=${gid}&task=${encodeURIComponent(taskName)}&hours=${val}&t=${new Date().getTime()}`;
+            const updateUrl = `${WEB_APP_URL}?id=${sheetId}&gid=${gid}&task=${encodeURIComponent(taskName)}&hours=${val}&t=${new Date().getTime()}`;
             const response = await fetch(updateUrl);
             const result = await response.json();
 
