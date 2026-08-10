@@ -283,6 +283,24 @@
         .badge-notstarted { background: #fdedec; color: var(--danger); }
 
         .sync-badge { font-size: 12px; font-weight: normal; color: var(--success); }
+        /* =========================================
+   SMOOTH HOVER ANIMATION FOR METRIC BARS/CARDS
+   ========================================= */
+.metric-card {
+    transition: transform 0.3s ease, box-shadow 0.3s ease, background-color 0.3s ease !important;
+}
+
+.metric-card:hover {
+    transform: translateY(-6px) scale(1.02) !important;
+    box-shadow: 0 12px 25px -5px rgba(2, 132, 199, 0.2) !important;
+    background-color: #f0f9ff !important;
+}
+
+.metric-card:hover .metric-icon {
+    transform: scale(1.2) rotate(5deg);
+    opacity: 0.3;
+    transition: transform 0.3s ease, opacity 0.3s ease;
+}
     </style>
 </head>
 <body>
