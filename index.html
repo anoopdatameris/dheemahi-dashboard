@@ -59,9 +59,6 @@
 
         .grid-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 20px; }
         
-        /* =========================================
-           ANIMATIONS & ENHANCED HOVER EFFECTS
-           ========================================= */
         @keyframes fadeInScale {
             0% { opacity: 0; transform: translateY(10px); }
             100% { opacity: 1; transform: translateY(0); }
@@ -71,26 +68,54 @@
             animation: fadeInScale 0.4s ease-out forwards;
         }
 
+        /* =========================================
+           INTERACTIVE METRIC CARD & BAR HOVER STYLES
+           ========================================= */
         .metric-card { 
             background: #ffffff; padding: 20px; border-radius: 10px; border: 1px solid var(--border);
-            border-left: 5px solid var(--accent); cursor: pointer; user-select: none;
+            border-left: 6px solid var(--accent); cursor: pointer; user-select: none;
             box-shadow: 0 2px 4px rgba(0,0,0,0.02); position: relative; overflow: hidden;
-            /* Enhanced transitions for smooth hover reaction */
-            transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.3s cubic-bezier(0.4, 0, 0.2, 1), background-color 0.3s ease, border-color 0.3s ease;
+            transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.3s cubic-bezier(0.4, 0, 0.2, 1), background-color 0.3s ease;
         }
         
-        /* Hover Effect on Metric Cards/Bars */
         .metric-card:hover { 
             transform: translateY(-6px) scale(1.02); 
-            box-shadow: 0 14px 25px -5px rgba(2, 132, 199, 0.18); 
+            box-shadow: 0 16px 30px -8px rgba(2, 132, 199, 0.2); 
             background-color: #f0f9ff;
             border-color: var(--accent); 
         }
 
         .metric-card:hover .metric-icon {
-            transform: scale(1.2) rotate(5deg);
+            transform: scale(1.25) rotate(8deg);
             opacity: 0.3;
         }
+
+        /* Animated Progress Bar inside Card */
+        .card-bar-track {
+            width: 100%;
+            height: 6px;
+            background: #e2e8f0;
+            border-radius: 3px;
+            margin-top: 14px;
+            overflow: hidden;
+        }
+
+        .card-bar-fill {
+            height: 100%;
+            width: 0%;
+            border-radius: 3px;
+            transition: width 1s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .metric-card:hover .card-bar-fill {
+            filter: brightness(1.15);
+            box-shadow: 0 0 8px rgba(2, 132, 199, 0.4);
+        }
+
+        .metric-card.success .card-bar-fill { background-color: var(--success); }
+        .metric-card.warning .card-bar-fill { background-color: var(--warning); }
+        .metric-card.danger .card-bar-fill { background-color: var(--danger); }
+        .metric-card:not(.success):not(.warning):not(.danger) .card-bar-fill { background-color: var(--accent); }
 
         .metric-card.active-filter { border: 2px solid var(--accent); background: #f0f9ff; }
         .metric-card.warning { border-left-color: var(--warning); }
@@ -392,12 +417,14 @@
                 <div style="font-size: 11px; font-weight: 700; color: #64748b; text-transform: uppercase;">Overall Completion</div>
                 <div style="font-size: 26px; font-weight: 700; color: var(--primary); margin: 6px 0;">${completionPct}%</div>
                 <div style="font-size: 12px; color: #64748b;">${completedCount} of ${totalTasks} tasks finished</div>
+                <div class="card-bar-track"><div class="card-bar-fill" style="width: ${completionPct}%;"></div></div>
             </div>
             <div class="metric-card">
                 <i class="fa-solid fa-clock metric-icon" style="color: var(--accent);"></i>
                 <div style="font-size: 11px; font-weight: 700; color: #64748b; text-transform: uppercase;">Total Estimated Effort</div>
                 <div style="font-size: 26px; font-weight: 700; color: var(--accent); margin: 6px 0;">${totalHours.toFixed(1)} hrs</div>
                 <div style="font-size: 12px; color: #64748b;">${completedHours.toFixed(1)} hrs completed</div>
+                <div class="card-bar-track"><div class="card-bar-fill" style="width: ${totalHours > 0 ? (completedHours/totalHours)*100 : 0}%;"></div></div>
             </div>
         `;
 
@@ -479,25 +506,28 @@
             return dt && dt < today;
         });
 
-        // Render Metric Cards
+        // Render Metric Cards with interactive progress bars
         document.getElementById('metricCardsContainer').innerHTML = `
             <div onclick="filterByCard('completed')" class="metric-card success ${activeCardFilter === 'completed' ? 'active-filter' : ''}">
                 <i class="fa-solid fa-circle-check metric-icon" style="color: var(--success);"></i>
                 <div style="font-size: 11px; font-weight: 700; color: #64748b; text-transform: uppercase;">Task Completion</div>
                 <div style="font-size: 26px; font-weight: 700; color: var(--primary); margin: 6px 0;">${completionPct}%</div>
                 <div style="font-size: 12px; color: #64748b;">${completedTasksCount} of ${totalTasks} tasks done</div>
+                <div class="card-bar-track"><div class="card-bar-fill" style="width: ${completionPct}%;"></div></div>
             </div>
             <div onclick="filterByCard('pending')" class="metric-card ${activeCardFilter === 'pending' ? 'active-filter' : ''}">
                 <i class="fa-solid fa-clock metric-icon" style="color: var(--accent);"></i>
                 <div style="font-size: 11px; font-weight: 700; color: #64748b; text-transform: uppercase;">Remaining Capacity</div>
                 <div style="font-size: 26px; font-weight: 700; color: var(--danger); margin: 6px 0;">${remainingCapacity.toFixed(1)} hrs</div>
                 <div style="font-size: 12px; color: #64748b;">Pending effort hours</div>
+                <div class="card-bar-track"><div class="card-bar-fill" style="width: ${totalHours > 0 ? (remainingCapacity/totalHours)*100 : 0}%;"></div></div>
             </div>
             <div onclick="filterByCard('overloaded')" class="metric-card ${overloadedDaysCount > 0 ? 'warning' : 'success'} ${activeCardFilter === 'overloaded' ? 'active-filter' : ''}">
                 <i class="fa-solid fa-triangle-exclamation metric-icon" style="color: var(--warning);"></i>
                 <div style="font-size: 11px; font-weight: 700; color: #64748b; text-transform: uppercase;">Overloaded Days (>7 hrs)</div>
                 <div style="font-size: 26px; font-weight: 700; color: var(--primary); margin: 6px 0;">${overloadedDaysCount} Day(s)</div>
                 <div style="font-size: 12px; color: #64748b;">Heavy workload periods</div>
+                <div class="card-bar-track"><div class="card-bar-fill" style="width: ${Math.min(overloadedDaysCount * 25, 100)}%;"></div></div>
             </div>
         `;
 
