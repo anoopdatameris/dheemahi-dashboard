@@ -304,6 +304,12 @@
     <!-- Filters Bar -->
     <div class="controls-bar" id="filtersBarSection">
         <div class="control-group">
+            <label for="monthFilter">Reporting Month</label>
+            <select id="monthFilter" onchange="render()">
+                <option value="ALL">All Months</option>
+            </select>
+        </div>
+        <div class="control-group">
             <label for="statusFilter">Status Filter</label>
             <select id="statusFilter" onchange="render()">
                 <option value="ALL">All Statuses</option>
@@ -424,11 +430,12 @@
         if (response && response.status !== 'error' && response.table) {
             const table = response.table;
             const rows = table.rows;
-            let colMap = { date: 0, task: 1, project: 2, est: 3, act: 4, status: 8 };
+            let colMap = { date: 0, month: 1, task: 2, project: 3, est: 4, act: 5, status: 9 };
 
             table.cols.forEach((col, idx) => {
                 let label = (col.label || '').toUpperCase();
-                if (label.includes('DATE')) colMap.date = idx;
+                if (label === 'DATE' || (label.includes('DATE') && !label.includes('UPDATED'))) colMap.date = idx;
+                if (label.includes('REPORTING MONTH')) colMap.month = idx;
                 if (label.includes('TASK')) colMap.task = idx;
                 if (label.includes('PROJECT')) colMap.project = idx;
                 if (label.includes('ESTIMATED')) colMap.est = idx;
@@ -458,6 +465,18 @@
                     }
                 }
 
+                let monthVal = '';
+                if (c[colMap.month]) {
+                    monthVal = c[colMap.month].f || c[colMap.month].v || '';
+                    if (String(monthVal).includes('Date(')) {
+                        let parts = String(monthVal).match(/\d+/g);
+                        if (parts && parts.length >= 2) {
+                            let months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+                            monthVal = `${months[parseInt(parts[1])]} ${parts[0]}`;
+                        }
+                    }
+                }
+
                 let estVal = c[colMap.est] ? parseFloat(c[colMap.est].v) || 0 : 0;
                 let actVal = c[colMap.act] ? parseFloat(c[colMap.act].v) || 0 : 0;
                 let statusVal = c[colMap.status] && c[colMap.status].v ? String(c[colMap.status].v) : 'Not Started';
@@ -465,6 +484,7 @@
                 rawData.push({
                     SOURCE_SHEET: sourceName,
                     DATE_STR: String(dateStr),
+                    REPORTING_MONTH: String(monthVal),
                     TASK: task,
                     PROJECT: c[colMap.project] && c[colMap.project].v ? String(c[colMap.project].v) : 'Dheemahi Ayur',
                     Category: categorize(task),
@@ -483,7 +503,37 @@
             document.getElementById('syncStatus').innerText = `✓ Synced ${sheetsToFetch.length} Sheets`;
             document.getElementById('syncStatus').style.color = '#2ecc71';
             buildTabs();
+            buildMonthFilter();
             render();
+        }
+    }
+
+    function monthValue(monthText) {
+        if (!monthText) return 0;
+        const parts = String(monthText).trim().split(/\s+/);
+        if (parts.length < 2) return 0;
+        const months = {Jan:0,Feb:1,Mar:2,Apr:3,May:4,Jun:5,Jul:6,Aug:7,Sep:8,Oct:9,Nov:10,Dec:11};
+        const m = months[parts[0]];
+        const y = parseInt(parts[1], 10);
+        return (m === undefined || isNaN(y)) ? 0 : new Date(y, m, 1).getTime();
+    }
+
+    function buildMonthFilter() {
+        const select = document.getElementById('monthFilter');
+        const currentValue = select.value;
+
+        const months = [...new Set(
+            rawData.map(d => d.REPORTING_MONTH).filter(Boolean)
+        )].sort((a, b) => monthValue(a) - monthValue(b));
+
+        select.innerHTML =
+            '<option value="ALL">All Months</option>' +
+            months.map(m => `<option value="${m}">${m}</option>`).join('');
+
+        if (currentValue && (currentValue === 'ALL' || months.includes(currentValue))) {
+            select.value = currentValue;
+        } else if (months.length) {
+            select.value = months[months.length - 1];
         }
     }
 
@@ -505,11 +555,16 @@
     }
 
     function render() {
+        const monthFilter = document.getElementById('monthFilter').value;
         const statusFilter = document.getElementById('statusFilter').value;
         const categoryFilter = document.getElementById('categoryFilter').value;
         const searchVal = document.getElementById('searchInput').value.toLowerCase();
 
-        const tabFiltered = rawData.filter(d => currentTab === 'SUMMARY' || d.SOURCE_SHEET === currentTab);
+        const tabFiltered = rawData.filter(d => {
+            const matchTab = currentTab === 'SUMMARY' || d.SOURCE_SHEET === currentTab;
+            const matchMonth = monthFilter === 'ALL' || d.REPORTING_MONTH === monthFilter;
+            return matchTab && matchMonth;
+        });
 
         const filtered = tabFiltered.filter(d => {
             const matchStatus = statusFilter === 'ALL' || d.STATUS === statusFilter;
@@ -569,7 +624,7 @@
 
         let overloadedResourcesMap = {};
         sheetsToFetch.forEach(s => {
-            let resData = rawData.filter(d => d.SOURCE_SHEET === s.name);
+            let resData = tabFiltered.filter(d => d.SOURCE_SHEET === s.name);
             let dateMap = {};
             resData.forEach(d => { dateMap[d.DATE_STR] = (dateMap[d.DATE_STR] || 0) + d['ESTIMATED HOURS']; });
             for (let dt in dateMap) {
@@ -586,7 +641,7 @@
 
         let projectProgressHTML = '';
         sheetsToFetch.forEach(s => {
-            let resTasks = rawData.filter(d => d.SOURCE_SHEET === s.name);
+            let resTasks = tabFiltered.filter(d => d.SOURCE_SHEET === s.name);
             let resComp = resTasks.filter(d => d.STATUS === 'Completed').length;
             let resPct = resTasks.length > 0 ? ((resComp / resTasks.length) * 100).toFixed(1) : 0;
             projectProgressHTML += `
@@ -681,7 +736,7 @@
                 <div id="drill_res_remainingCap" class="drilldown-panel">
                     <div style="font-weight: bold; color: var(--accent); margin-bottom: 8px;">⏳ Remaining Capacity Breakdown by Resource:</div>
                     ${sheetsToFetch.map(s => {
-                        let resTasks = rawData.filter(d => d.SOURCE_SHEET === s.name);
+                        let resTasks = tabFiltered.filter(d => d.SOURCE_SHEET === s.name);
                         let resHrs = resTasks.reduce((sum, d) => sum + d['ESTIMATED HOURS'], 0);
                         let resCompHrs = resTasks.filter(d => d.STATUS === 'Completed').reduce((sum, d) => sum + d['ESTIMATED HOURS'], 0);
                         let resRem = resHrs - resCompHrs;
@@ -756,7 +811,7 @@
 
         let summaryTableHTML = '';
         sheetsToFetch.forEach(s => {
-            let resTasks = rawData.filter(d => d.SOURCE_SHEET === s.name);
+            let resTasks = tabFiltered.filter(d => d.SOURCE_SHEET === s.name);
             let resComp = resTasks.filter(d => d.STATUS === 'Completed').length;
             let resHrs = resTasks.reduce((sum, d) => sum + d['ESTIMATED HOURS'], 0);
             summaryTableHTML += `
@@ -780,7 +835,11 @@
         const resPct = totalHours > 0 ? ((completedHours / totalHours) * 100).toFixed(1) : 0;
 
         let resDateMap = {};
-        let allResTasks = rawData.filter(d => d.SOURCE_SHEET === currentTab);
+        const selectedMonth = document.getElementById('monthFilter').value;
+        let allResTasks = rawData.filter(d =>
+            d.SOURCE_SHEET === currentTab &&
+            (selectedMonth === 'ALL' || d.REPORTING_MONTH === selectedMonth)
+        );
         allResTasks.forEach(d => { resDateMap[d.DATE_STR] = (resDateMap[d.DATE_STR] || 0) + d['ESTIMATED HOURS']; });
         
         let overloadedDates = new Set();
@@ -969,6 +1028,7 @@
     }
 
     function resetFilters() {
+        document.getElementById('monthFilter').value = 'ALL';
         document.getElementById('statusFilter').value = 'ALL';
         document.getElementById('categoryFilter').value = 'ALL';
         document.getElementById('searchInput').value = '';
