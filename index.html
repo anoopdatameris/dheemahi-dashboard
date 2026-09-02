@@ -466,6 +466,7 @@
             cleanup();
 
             if (useGid) {
+                // One retry without gid, useful if the resource renamed/recreated its tab.
                 loadOneSheet(sheet, index, false);
                 return;
             }
@@ -479,14 +480,10 @@
         window[callbackName] = function(response) {
             if (finished) return;
 
-            const ok = processSingleSheetResponse(response, sheet.name);
+            const result = processSingleSheetResponse(response, sheet.name);
 
-            if (!ok) {
-                finishFailure(
-                    response && response.errors && response.errors.length
-                        ? (response.errors[0].detailed_message || response.errors[0].message || 'Google Sheets returned an error')
-                        : 'No usable table data returned'
-                );
+            if (!result.ok) {
+                finishFailure(result.reason || 'No usable task rows returned');
                 return;
             }
 
@@ -503,17 +500,13 @@
 
         const params = [
             useGid ? `gid=${encodeURIComponent(sheet.gid)}` : '',
-            'headers=1',
+            'headers=0',
             `tqx=${encodeURIComponent('out:json;responseHandler:' + callbackName)}`,
             `_=${Date.now()}`
         ].filter(Boolean).join('&');
 
         script.src = `${base}?${params}`;
-
-        script.onerror = function() {
-            finishFailure('Unable to load Google Sheets data');
-        };
-
+        script.onerror = () => finishFailure('Unable to load Google Sheets data');
         document.body.appendChild(script);
 
         timer = setTimeout(() => {
@@ -521,107 +514,262 @@
         }, 12000);
     }
 
+    function cellText(cell) {
+        if (!cell) return '';
+        if (cell.f !== null && cell.f !== undefined && String(cell.f).trim() !== '') {
+            return String(cell.f).trim();
+        }
+        if (cell.v !== null && cell.v !== undefined) {
+            return String(cell.v).trim();
+        }
+        return '';
+    }
+
+    function normalizeHeader(text) {
+        return String(text || '')
+            .trim()
+            .toUpperCase()
+            .replace(/[_\n\r]+/g, ' ')
+            .replace(/\s+/g, ' ');
+    }
+
+    function detectHeaderRow(rows) {
+        const wanted = [
+            'DATE',
+            'REPORTING MONTH',
+            'TASK',
+            'PROJECT',
+            'ESTIMATED',
+            'ACTUAL',
+            'STATUS'
+        ];
+
+        let bestIndex = -1;
+        let bestScore = 0;
+
+        for (let r = 0; r < Math.min(rows.length, 12); r++) {
+            const cells = (rows[r] && rows[r].c) || [];
+            const texts = cells.map(cell => normalizeHeader(cellText(cell)));
+
+            let score = 0;
+
+            wanted.forEach(term => {
+                if (texts.some(t => t === term || t.includes(term))) {
+                    score++;
+                }
+            });
+
+            if (score > bestScore) {
+                bestScore = score;
+                bestIndex = r;
+            }
+        }
+
+        return bestScore >= 3 ? bestIndex : -1;
+    }
+
+    function buildColumnMap(headerCells) {
+        const headers = headerCells.map(cell => normalizeHeader(cellText(cell)));
+
+        const findIndex = (tests) => {
+            for (let i = 0; i < headers.length; i++) {
+                const h = headers[i];
+                if (tests.some(test => test(h))) return i;
+            }
+            return -1;
+        };
+
+        return {
+            date: findIndex([
+                h => h === 'DATE',
+                h => h.includes('TASK DATE'),
+                h => h.includes('SCHEDULE DATE'),
+                h => h.includes('DUE DATE') && !h.includes('UPDATED')
+            ]),
+            month: findIndex([
+                h => h.includes('REPORTING MONTH'),
+                h => h === 'MONTH',
+                h => h.includes('MONTH YEAR')
+            ]),
+            task: findIndex([
+                h => h === 'TASK',
+                h => h.includes('TASK NAME'),
+                h => h.includes('TASK DESCRIPTION'),
+                h => h.includes('ACTIVITY')
+            ]),
+            project: findIndex([
+                h => h === 'PROJECT',
+                h => h.includes('PROJECT NAME')
+            ]),
+            est: findIndex([
+                h => h.includes('ESTIMATED') && h.includes('HOUR'),
+                h => h.includes('PLANNED') && h.includes('HOUR'),
+                h => h === 'EST HRS'
+            ]),
+            act: findIndex([
+                h => h.includes('ACTUAL') && h.includes('HOUR'),
+                h => h === 'ACT HRS'
+            ]),
+            status: findIndex([
+                h => h === 'STATUS',
+                h => h.includes('TASK STATUS')
+            ])
+        };
+    }
+
+    function normalizeDateDisplay(value) {
+        const text = String(value || '').trim();
+        if (!text) return '';
+
+        if (text.includes('Date(')) {
+            const parts = text.match(/\d+/g);
+            if (parts && parts.length >= 3) {
+                const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+                const d = String(Number(parts[2])).padStart(2, '0');
+                const m = months[Number(parts[1])];
+                const y = parts[0];
+                return `${d}-${m}-${y}`;
+            }
+        }
+
+        const parsed = parseDateObj(text);
+        if (parsed && !isNaN(parsed.getTime())) {
+            const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+            return `${String(parsed.getDate()).padStart(2,'0')}-${months[parsed.getMonth()]}-${parsed.getFullYear()}`;
+        }
+
+        return text;
+    }
+
+    function normalizeReportingMonth(value) {
+        const text = String(value || '').trim();
+        if (!text) return '';
+
+        const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+        const monthMap = {
+            jan:'Jan', feb:'Feb', mar:'Mar', apr:'Apr',
+            may:'May', jun:'Jun', jul:'Jul', aug:'Aug',
+            sep:'Sep', oct:'Oct', nov:'Nov', dec:'Dec'
+        };
+
+        // Explicitly convert full dates such as 1-Sep-2026 / 01-Sep-2026.
+        let m = text.match(/^(\d{1,2})[-\/]([A-Za-z]{3,9})[-\/](\d{4})$/);
+        if (m) {
+            const key = m[2].slice(0,3).toLowerCase();
+            if (monthMap[key]) {
+                return `${monthMap[key]} ${m[3]}`;
+            }
+        }
+
+        // Numeric full date such as 01/09/2026.
+        m = text.match(/^(\d{1,2})[\/-](\d{1,2})[\/-](\d{4})$/);
+        if (m) {
+            const monthNumber = Number(m[2]);
+            if (monthNumber >= 1 && monthNumber <= 12) {
+                return `${months[monthNumber - 1]} ${m[3]}`;
+            }
+        }
+
+        // Google GViz raw date: Date(2026,8,1)
+        if (text.includes('Date(')) {
+            const parts = text.match(/\d+/g);
+            if (parts && parts.length >= 2) {
+                return `${months[Number(parts[1])]} ${parts[0]}`;
+            }
+        }
+
+        // Already canonical: Sep 2026 / September 2026.
+        m = text.match(/^([A-Za-z]{3,9})\s+(\d{4})$/);
+        if (m) {
+            const key = m[1].slice(0,3).toLowerCase();
+            if (monthMap[key]) {
+                return `${monthMap[key]} ${m[2]}`;
+            }
+        }
+
+        return text;
+    }
+
     function processSingleSheetResponse(response, sourceName) {
         try {
             if (!response || response.status === 'error' || !response.table) {
-                return false;
+                return { ok:false, reason:'Google Sheets returned an error' };
             }
 
-            const table = response.table;
-            const rows = Array.isArray(table.rows) ? table.rows : [];
-            const cols = Array.isArray(table.cols) ? table.cols : [];
+            const rows = Array.isArray(response.table.rows) ? response.table.rows : [];
+            if (!rows.length) {
+                return { ok:false, reason:'Sheet returned no rows' };
+            }
 
-            if (!cols.length) return false;
+            const headerRowIndex = detectHeaderRow(rows);
 
-            let colMap = {
-                date: 0,
-                month: 1,
-                task: 2,
-                project: 3,
-                est: 4,
-                act: 5,
-                status: 9
-            };
+            let colMap;
+            let dataStart;
 
-            cols.forEach((col, idx) => {
-                const label = String((col && col.label) || '').trim().toUpperCase();
+            if (headerRowIndex >= 0) {
+                const headerCells = (rows[headerRowIndex] && rows[headerRowIndex].c) || [];
+                colMap = buildColumnMap(headerCells);
+                dataStart = headerRowIndex + 1;
+            } else {
+                // Last-resort compatibility with the original dashboard layout.
+                colMap = { date:0, month:1, task:2, project:3, est:4, act:5, status:9 };
+                dataStart = 0;
+            }
 
-                if (label === 'DATE' || (label.includes('DATE') && !label.includes('UPDATED'))) colMap.date = idx;
-                if (label.includes('REPORTING MONTH')) colMap.month = idx;
-                if (label.includes('TASK')) colMap.task = idx;
-                if (label.includes('PROJECT')) colMap.project = idx;
-                if (label.includes('ESTIMATED')) colMap.est = idx;
-                if (label.includes('ACTUAL')) colMap.act = idx;
-                if (label.includes('STATUS')) colMap.status = idx;
-            });
+            if (colMap.task < 0) {
+                return { ok:false, reason:'Task column could not be identified' };
+            }
 
             let added = 0;
 
-            rows.forEach(r => {
-                const c = r && r.c;
-                if (!c) return;
+            for (let r = dataStart; r < rows.length; r++) {
+                const c = (rows[r] && rows[r].c) || [];
 
-                const taskCell = c[colMap.task];
-                const task = taskCell && taskCell.v !== null && taskCell.v !== undefined
-                    ? String(taskCell.v).trim()
-                    : '';
+                const task = cellText(c[colMap.task]);
+                if (!task || task.toLowerCase() === 'sunday') continue;
 
-                if (!task || task.toLowerCase() === 'sunday') return;
+                const rawDate = colMap.date >= 0 ? cellText(c[colMap.date]) : '';
+                const dateStr = normalizeDateDisplay(rawDate);
 
-                let dateStr = '';
-                const dateCell = c[colMap.date];
+                let rawMonth = colMap.month >= 0 ? cellText(c[colMap.month]) : '';
+                let monthVal = normalizeReportingMonth(rawMonth);
 
-                if (dateCell) {
-                    dateStr = dateCell.f || dateCell.v || '';
-
-                    if (String(dateStr).includes('Date(')) {
-                        const parts = String(dateStr).match(/\d+/g);
-                        if (parts && parts.length >= 3) {
-                            const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-                            const d = String(parts[2]).padStart(2, '0');
-                            const m = months[parseInt(parts[1], 10)];
-                            const y = parts[0];
-                            dateStr = `${d}-${m}-${y}`;
-                        }
+                // If Reporting Month is blank, derive it from task date.
+                if (!monthVal && dateStr) {
+                    const d = parseDateObj(dateStr);
+                    if (d && !isNaN(d.getTime())) {
+                        const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+                        monthVal = `${months[d.getMonth()]} ${d.getFullYear()}`;
                     }
                 }
 
-                let monthVal = '';
-                const monthCell = c[colMap.month];
+                const estText = colMap.est >= 0 ? cellText(c[colMap.est]) : '';
+                const actText = colMap.act >= 0 ? cellText(c[colMap.act]) : '';
 
-                if (monthCell) {
-                    monthVal = monthCell.f || monthCell.v || '';
-
-                    if (String(monthVal).includes('Date(')) {
-                        const parts = String(monthVal).match(/\d+/g);
-                        if (parts && parts.length >= 2) {
-                            const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-                            monthVal = `${months[parseInt(parts[1], 10)]} ${parts[0]}`;
-                        }
-                    }
-                }
-
-                const estVal = c[colMap.est] ? parseFloat(c[colMap.est].v) || 0 : 0;
-                const actVal = c[colMap.act] ? parseFloat(c[colMap.act].v) || 0 : 0;
+                const estVal = parseFloat(String(estText).replace(/,/g,'')) || 0;
+                const actVal = parseFloat(String(actText).replace(/,/g,'')) || 0;
 
                 let statusVal =
-                    c[colMap.status] && c[colMap.status].v
-                        ? String(c[colMap.status].v).trim()
+                    colMap.status >= 0
+                        ? cellText(c[colMap.status])
                         : 'Not Started';
 
-                const statusKey = statusVal.toLowerCase().replace(/\s+/g, ' ').trim();
+                if (!statusVal) statusVal = 'Not Started';
+
+                const statusKey = statusVal.toLowerCase().replace(/\s+/g,' ').trim();
                 if (statusKey === 'in progress' || statusKey === 'in-progress') statusVal = 'In-Progress';
-                if (statusKey === 'completed' || statusKey === 'complete') statusVal = 'Completed';
-                if (statusKey === 'not started' || statusKey === 'not-started') statusVal = 'Not Started';
+                else if (statusKey === 'completed' || statusKey === 'complete') statusVal = 'Completed';
+                else if (statusKey === 'not started' || statusKey === 'not-started') statusVal = 'Not Started';
 
                 rawData.push({
                     SOURCE_SHEET: sourceName,
-                    DATE_STR: String(dateStr),
-                    REPORTING_MONTH: String(monthVal).trim(),
+                    DATE_STR: dateStr,
+                    REPORTING_MONTH: monthVal,
                     TASK: task,
-                    PROJECT: c[colMap.project] && c[colMap.project].v
-                        ? String(c[colMap.project].v)
-                        : 'Dheemahi Ayur',
+                    PROJECT:
+                        colMap.project >= 0 && cellText(c[colMap.project])
+                            ? cellText(c[colMap.project])
+                            : 'Dheemahi Ayur',
                     Category: categorize(task),
                     'ESTIMATED HOURS': estVal,
                     'ACTUAL HOURS': actVal,
@@ -629,12 +777,19 @@
                 });
 
                 added++;
-            });
+            }
 
-            return added > 0;
+            if (!added) {
+                return {
+                    ok:false,
+                    reason:`No task rows detected. Header row: ${headerRowIndex >= 0 ? headerRowIndex + 1 : 'not detected'}`
+                };
+            }
+
+            return { ok:true, added };
         } catch (error) {
             console.error(`Processing failed for ${sourceName}:`, error);
-            return false;
+            return { ok:false, reason:String(error && error.message ? error.message : error) };
         }
     }
 
@@ -650,19 +805,13 @@
         } else if (successfulFetches > 0) {
             status.innerText = `⚠ Synced ${successfulFetches}/${sheetsToFetch.length} Sheets`;
             status.style.color = '#e67e22';
-
             warning.style.display = 'block';
-            warning.textContent =
-                'Some resource sheets could not be loaded. ' +
-                fetchErrors.join(' | ');
+            warning.textContent = 'Some resource sheets could not be loaded. ' + fetchErrors.join(' | ');
         } else {
             status.innerText = '✕ Resource sheets not loaded';
             status.style.color = '#e74c3c';
-
             warning.style.display = 'block';
-            warning.textContent =
-                'No Google Sheet data could be loaded. Check sheet sharing permission and tab/gid. ' +
-                fetchErrors.join(' | ');
+            warning.textContent = 'No Google Sheet data could be loaded. ' + fetchErrors.join(' | ');
         }
 
         buildTabs();
@@ -672,20 +821,37 @@
 
     function monthValue(monthText) {
         if (!monthText) return 0;
-        const parts = String(monthText).trim().split(/\s+/);
-        if (parts.length < 2) return 0;
-        const months = {Jan:0,Feb:1,Mar:2,Apr:3,May:4,Jun:5,Jul:6,Aug:7,Sep:8,Oct:9,Nov:10,Dec:11};
-        const m = months[parts[0]];
-        const y = parseInt(parts[1], 10);
-        return (m === undefined || isNaN(y)) ? 0 : new Date(y, m, 1).getTime();
+
+        const normalized = normalizeReportingMonth(monthText);
+        const parts = String(normalized).trim().split(/\s+/);
+
+        if (parts.length >= 2) {
+            const months = {Jan:0,Feb:1,Mar:2,Apr:3,May:4,Jun:5,Jul:6,Aug:7,Sep:8,Oct:9,Nov:10,Dec:11};
+            const m = months[parts[0]];
+            const y = parseInt(parts[1], 10);
+            if (m !== undefined && !isNaN(y)) return new Date(y, m, 1).getTime();
+        }
+
+        const parsed = parseDateObj(String(monthText));
+        return parsed && !isNaN(parsed.getTime())
+            ? new Date(parsed.getFullYear(), parsed.getMonth(), 1).getTime()
+            : 0;
     }
 
     function buildMonthFilter() {
         const select = document.getElementById('monthFilter');
-        const currentValue = select.value;
+        const currentValue = normalizeReportingMonth(select.value);
+
+        // Normalize every row once more here so accidental values such as
+        // "1-Sep-2026" become "Sep 2026" and cannot appear as a separate month.
+        rawData.forEach(d => {
+            d.REPORTING_MONTH = normalizeReportingMonth(d.REPORTING_MONTH);
+        });
 
         const months = [...new Set(
-            rawData.map(d => d.REPORTING_MONTH).filter(Boolean)
+            rawData
+                .map(d => d.REPORTING_MONTH)
+                .filter(Boolean)
         )].sort((a, b) => monthValue(a) - monthValue(b));
 
         select.innerHTML =
