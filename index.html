@@ -538,52 +538,103 @@
         }
     }
 
+    function canonicalReportingMonth(value) {
+        const text = String(value || '').trim();
+        if (!text) return '';
+
+        const map = {
+            jan:'Jan', january:'Jan',
+            feb:'Feb', february:'Feb',
+            mar:'Mar', march:'Mar',
+            apr:'Apr', april:'Apr',
+            may:'May',
+            jun:'Jun', june:'Jun',
+            jul:'Jul', july:'Jul',
+            aug:'Aug', august:'Aug',
+            sep:'Sept', sept:'Sept', september:'Sept',
+            oct:'Oct', october:'Oct',
+            nov:'Nov', november:'Nov',
+            dec:'Dec', december:'Dec'
+        };
+
+        // Month + year: "Sep 2026", "Sept 2026", "Sep-2026", etc.
+        let m = text.match(/^([A-Za-z]{3,9})[\s-]+(20\d{2})$/);
+        if (m) {
+            const key = m[1].toLowerCase();
+            if (map[key]) {
+                return `${map[key]}-${m[2]}`;
+            }
+        }
+
+        // Full named date: "1-Sep-2026", "01 Sept 2026", etc.
+        m = text.match(/^\d{1,2}[\s\/-]+([A-Za-z]{3,9})[\s\/-]+(20\d{2})$/);
+        if (m) {
+            const key = m[1].toLowerCase();
+            if (map[key]) {
+                return `${map[key]}-${m[2]}`;
+            }
+        }
+
+        // Numeric full date: 01/09/2026
+        m = text.match(/^\d{1,2}[\/-](\d{1,2})[\/-](20\d{2})$/);
+        if (m) {
+            const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sept','Oct','Nov','Dec'];
+            const mn = Number(m[1]);
+            if (mn >= 1 && mn <= 12) {
+                return `${months[mn - 1]}-${m[2]}`;
+            }
+        }
+
+        return text;
+    }
+
+
     function monthValue(monthText) {
         if (!monthText) return 0;
-        const parts = String(monthText).trim().split(/\s+/);
-        if (parts.length < 2) return 0;
-        const months = {Jan:0,Feb:1,Mar:2,Apr:3,May:4,Jun:5,Jul:6,Aug:7,Sep:8,Oct:9,Nov:10,Dec:11};
-        const m = months[parts[0]];
-        const y = parseInt(parts[1], 10);
-        return (m === undefined || isNaN(y)) ? 0 : new Date(y, m, 1).getTime();
+
+        const canonical = canonicalReportingMonth(monthText);
+        const m = String(canonical).match(/^([A-Za-z]{3,4})-(20\d{2})$/);
+
+        if (!m) return 0;
+
+        const months = {
+            Jan:0, Feb:1, Mar:2, Apr:3, May:4, Jun:5,
+            Jul:6, Aug:7, Sept:8, Oct:9, Nov:10, Dec:11
+        };
+
+        const monthIndex = months[m[1]];
+        const year = Number(m[2]);
+
+        return monthIndex === undefined
+            ? 0
+            : new Date(year, monthIndex, 1).getTime();
     }
 
     function buildMonthFilter() {
         const select = document.getElementById('monthFilter');
-        const currentValue = select.value;
+
+        const currentValue =
+            select.value === 'ALL'
+                ? 'ALL'
+                : canonicalReportingMonth(select.value);
 
         const months = [...new Set(
-            rawData.map(d => d.REPORTING_MONTH).filter(Boolean)
+            rawData
+                .map(d => canonicalReportingMonth(d.REPORTING_MONTH))
+                .filter(Boolean)
         )].sort((a, b) => monthValue(a) - monthValue(b));
-
-        const monthDisplay = value => {
-            const parts = String(value || '').trim().split(/\s+/);
-
-            if (parts.length >= 2) {
-                const map = {
-                    Jan:'Jan', Feb:'Feb', Mar:'Mar', Apr:'Apr',
-                    May:'May', Jun:'Jun', Jul:'Jul', Aug:'Aug',
-                    Sep:'Sep', Sept:'Sep', Oct:'Oct', Nov:'Nov', Dec:'Dec'
-                };
-
-                const mon = map[parts[0]] || parts[0];
-                const year = parts[1];
-
-                if (/^\d{4}$/.test(year)) {
-                    return `${mon}-${year}`;
-                }
-            }
-
-            return String(value || '');
-        };
 
         select.innerHTML =
             '<option value="ALL">All Months</option>' +
-            months
-                .map(m => `<option value="${m}">${monthDisplay(m)}</option>`)
-                .join('');
+            months.map(m => `<option value="${m}">${m}</option>`).join('');
 
-        if (currentValue && (currentValue === 'ALL' || months.includes(currentValue))) {
+        if (
+            currentValue &&
+            (
+                currentValue === 'ALL' ||
+                months.includes(currentValue)
+            )
+        ) {
             select.value = currentValue;
         } else if (months.length) {
             select.value = months[months.length - 1];
@@ -615,7 +666,9 @@
 
         const tabFiltered = rawData.filter(d => {
             const matchTab = currentTab === 'SUMMARY' || d.SOURCE_SHEET === currentTab;
-            const matchMonth = monthFilter === 'ALL' || d.REPORTING_MONTH === monthFilter;
+            const matchMonth =
+                monthFilter === 'ALL' ||
+                canonicalReportingMonth(d.REPORTING_MONTH) === monthFilter;
             return matchTab && matchMonth;
         });
 
@@ -891,7 +944,10 @@
         const selectedMonth = document.getElementById('monthFilter').value;
         let allResTasks = rawData.filter(d =>
             d.SOURCE_SHEET === currentTab &&
-            (selectedMonth === 'ALL' || d.REPORTING_MONTH === selectedMonth)
+            (
+                selectedMonth === 'ALL' ||
+                canonicalReportingMonth(d.REPORTING_MONTH) === selectedMonth
+            )
         );
         allResTasks.forEach(d => { resDateMap[d.DATE_STR] = (resDateMap[d.DATE_STR] || 0) + d['ESTIMATED HOURS']; });
         
