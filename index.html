@@ -838,30 +838,125 @@
             : 0;
     }
 
+    function canonicalMonthLabel(value) {
+        const text = String(value || '').trim();
+        if (!text) return '';
+
+        const monthMap = {
+            jan:'Jan', feb:'Feb', mar:'Mar', apr:'Apr',
+            may:'May', jun:'Jun', jul:'Jul', aug:'Aug',
+            sep:'Sep', oct:'Oct', nov:'Nov', dec:'Dec'
+        };
+
+        // Catch ANY value containing a month name + 4-digit year,
+        // including "1-Sep-2026", "01 Sep 2026", "Sep-1-2026",
+        // and values with time text appended.
+        const named =
+            text.match(/(?:^|[^A-Za-z])(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[A-Za-z]*(?:[^0-9]+)(20\d{2})(?:$|[^0-9])/i)
+            ||
+            text.match(/(20\d{2})(?:[^A-Za-z]+)(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[A-Za-z]*/i);
+
+        if (named) {
+            let monthText;
+            let yearText;
+
+            if (/^20\d{2}$/.test(named[1] || '')) {
+                yearText = named[1];
+                monthText = named[2];
+            } else {
+                monthText = named[1];
+                yearText = named[2];
+            }
+
+            const key = String(monthText).slice(0,3).toLowerCase();
+
+            if (monthMap[key] && yearText) {
+                return `${monthMap[key]} ${yearText}`;
+            }
+        }
+
+        // Explicit dd/mm/yyyy or dd-mm-yyyy.
+        const numeric =
+            text.match(/^(\d{1,2})[\/-](\d{1,2})[\/-](20\d{2})(?:\s.*)?$/);
+
+        if (numeric) {
+            const monthNumber = Number(numeric[2]);
+            const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+
+            if (monthNumber >= 1 && monthNumber <= 12) {
+                return `${months[monthNumber - 1]} ${numeric[3]}`;
+            }
+        }
+
+        // Already canonical "Sep 2026".
+        const simple =
+            text.match(/^([A-Za-z]{3,9})\s+(20\d{2})$/);
+
+        if (simple) {
+            const key =
+                simple[1].slice(0,3).toLowerCase();
+
+            if (monthMap[key]) {
+                return `${monthMap[key]} ${simple[2]}`;
+            }
+        }
+
+        // Last fallback: use the existing normalizer.
+        return normalizeReportingMonth(text);
+    }
+
+
     function buildMonthFilter() {
         const select = document.getElementById('monthFilter');
-        const currentValue = normalizeReportingMonth(select.value);
 
-        // Normalize every row once more here so accidental values such as
-        // "1-Sep-2026" become "Sep 2026" and cannot appear as a separate month.
+        const currentValue =
+            select.value === 'ALL'
+                ? 'ALL'
+                : canonicalMonthLabel(select.value);
+
         rawData.forEach(d => {
-            d.REPORTING_MONTH = normalizeReportingMonth(d.REPORTING_MONTH);
+            d.REPORTING_MONTH =
+                canonicalMonthLabel(
+                    d.REPORTING_MONTH
+                );
         });
 
-        const months = [...new Set(
-            rawData
-                .map(d => d.REPORTING_MONTH)
-                .filter(Boolean)
-        )].sort((a, b) => monthValue(a) - monthValue(b));
+        const months = [
+            ...new Set(
+                rawData
+                    .map(d =>
+                        canonicalMonthLabel(
+                            d.REPORTING_MONTH
+                        )
+                    )
+                    .filter(Boolean)
+            )
+        ].sort((a, b) =>
+            monthValue(a) -
+            monthValue(b)
+        );
 
         select.innerHTML =
             '<option value="ALL">All Months</option>' +
-            months.map(m => `<option value="${m}">${m}</option>`).join('');
+            months
+                .map(m =>
+                    `<option value="${m}">${m}</option>`
+                )
+                .join('');
 
-        if (currentValue && (currentValue === 'ALL' || months.includes(currentValue))) {
+        if (
+            currentValue &&
+            (
+                currentValue === 'ALL' ||
+                months.includes(currentValue)
+            )
+        ) {
             select.value = currentValue;
         } else if (months.length) {
-            select.value = months[months.length - 1];
+            select.value =
+                months[
+                    months.length - 1
+                ];
         }
     }
 
@@ -890,7 +985,9 @@
 
         const tabFiltered = rawData.filter(d => {
             const matchTab = currentTab === 'SUMMARY' || d.SOURCE_SHEET === currentTab;
-            const matchMonth = monthFilter === 'ALL' || d.REPORTING_MONTH === monthFilter;
+            const matchMonth =
+                monthFilter === 'ALL' ||
+                canonicalMonthLabel(d.REPORTING_MONTH) === canonicalMonthLabel(monthFilter);
             return matchTab && matchMonth;
         });
 
@@ -1166,7 +1263,10 @@
         const selectedMonth = document.getElementById('monthFilter').value;
         let allResTasks = rawData.filter(d =>
             d.SOURCE_SHEET === currentTab &&
-            (selectedMonth === 'ALL' || d.REPORTING_MONTH === selectedMonth)
+            (
+                selectedMonth === 'ALL' ||
+                canonicalMonthLabel(d.REPORTING_MONTH) === canonicalMonthLabel(selectedMonth)
+            )
         );
         allResTasks.forEach(d => { resDateMap[d.DATE_STR] = (resDateMap[d.DATE_STR] || 0) + d['ESTIMATED HOURS']; });
         
