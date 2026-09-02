@@ -283,19 +283,6 @@
         .badge-notstarted { background: #fdedec; color: var(--danger); }
 
         .sync-badge { font-size: 12px; font-weight: normal; color: var(--success); }
-
-        .load-warning {
-            display: none;
-            background: #fff4e5;
-            color: #8a4b08;
-            border: 1px solid #f3c98b;
-            border-radius: 6px;
-            padding: 10px 12px;
-            margin-bottom: 16px;
-            font-size: 13px;
-            line-height: 1.45;
-        }
-
     </style>
 </head>
 <body>
@@ -308,8 +295,6 @@
         </div>
         <button onclick="resetFilters()" style="padding: 8px 15px; background: #fff; border: 1px solid var(--border); border-radius: 4px; cursor: pointer; font-weight: 600; transition: background 0.2s;" onmouseover="this.style.background='#f1f5f9'" onmouseout="this.style.background='#fff'">Reset Filters</button>
     </header>
-
-    <div id="loadWarning" class="load-warning"></div>
 
     <!-- Tab Navigation Bar -->
     <div class="tab-nav" id="tabNavContainer">
@@ -386,9 +371,6 @@
 
     let rawData = [];
     let completedFetches = 0;
-    let successfulFetches = 0;
-    let failedFetches = 0;
-    let fetchErrors = [];
     let currentTab = 'SUMMARY';
 
     function categorize(task) {
@@ -408,485 +390,178 @@
 
     function parseDateObj(dateStr) {
         if (!dateStr) return null;
-
-        const s = String(dateStr).trim();
-
-        let m = s.match(/^(\d{1,2})[-\/]([A-Za-z]{3})[-\/](\d{4})$/);
-        if (m) {
-            const months = {Jan:0,Feb:1,Mar:2,Apr:3,May:4,Jun:5,Jul:6,Aug:7,Sep:8,Oct:9,Nov:10,Dec:11};
-            const monKey = m[2].slice(0,1).toUpperCase() + m[2].slice(1,3).toLowerCase();
-            const mon = months[monKey];
-            if (mon !== undefined) return new Date(Number(m[3]), mon, Number(m[1]));
+        let parts = dateStr.split('-');
+        if (parts.length === 3) {
+            let months = {'Jan':0,'Feb':1,'Mar':2,'Apr':3,'May':4,'Jun':5,'Jul':6,'Aug':7,'Sep':8,'Oct':9,'Nov':10,'Dec':11};
+            let d = parseInt(parts[0]);
+            let m = months[parts[1]];
+            let y = parseInt(parts[2]);
+            if (!isNaN(d) && m !== undefined && !isNaN(y)) {
+                return new Date(y, m, d);
+            }
         }
-
-        m = s.match(/^(\d{1,2})[\/-](\d{1,2})[\/-](\d{4})$/);
-        if (m) return new Date(Number(m[3]), Number(m[2]) - 1, Number(m[1]));
-
-        m = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
-        if (m) return new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
-
-        const d = new Date(s);
-        return isNaN(d.getTime()) ? null : d;
+        return null;
     }
 
     function loadGoogleSheetsJSONP() {
         rawData = [];
         completedFetches = 0;
-        successfulFetches = 0;
-        failedFetches = 0;
-        fetchErrors = [];
-
-        const warning = document.getElementById('loadWarning');
-        warning.style.display = 'none';
-        warning.textContent = '';
-
         document.getElementById('syncStatus').innerText = '(Syncing sheets...)';
         document.getElementById('syncStatus').style.color = '#3498db';
 
         sheetsToFetch.forEach((sheet, index) => {
-            loadOneSheet(sheet, index, true);
+            const callbackName = `gviz_callback_${index}_${Date.now()}`;
+            window[callbackName] = function(response) {
+                processSingleSheetResponse(response, sheet.name);
+                delete window[callbackName];
+            };
+
+            const script = document.createElement('script');
+            script.src = `https://docs.google.com/spreadsheets/d/${sheet.sheetId}/gviz/tq?gid=${sheet.gid}&tqx=responseHandler:${callbackName}`;
+            script.onerror = function() {
+                completedFetches++;
+                checkAllComplete();
+            };
+            document.body.appendChild(script);
         });
     }
 
-    function loadOneSheet(sheet, index, useGid) {
-        const callbackName =
-            `gviz_callback_${index}_${useGid ? 'gid' : 'default'}_${Date.now()}_${Math.floor(Math.random()*100000)}`;
+    function processSingleSheetResponse(response, sourceName) {
+        if (response && response.status !== 'error' && response.table) {
+            const table = response.table;
+            const rows = table.rows;
+            let colMap = { date: 0, month: 1, task: 2, project: 3, est: 4, act: 5, status: 9 };
 
-        let finished = false;
-        let timer = null;
-
-        const cleanup = () => {
-            if (timer) clearTimeout(timer);
-            try { delete window[callbackName]; } catch(e) {}
-        };
-
-        const finishFailure = (reason) => {
-            if (finished) return;
-            finished = true;
-            cleanup();
-
-            if (useGid) {
-                // One retry without gid, useful if the resource renamed/recreated its tab.
-                loadOneSheet(sheet, index, false);
-                return;
-            }
-
-            failedFetches++;
-            fetchErrors.push(`${sheet.name}: ${reason}`);
-            completedFetches++;
-            checkAllComplete();
-        };
-
-        window[callbackName] = function(response) {
-            if (finished) return;
-
-            const result = processSingleSheetResponse(response, sheet.name);
-
-            if (!result.ok) {
-                finishFailure(result.reason || 'No usable task rows returned');
-                return;
-            }
-
-            finished = true;
-            cleanup();
-            successfulFetches++;
-            completedFetches++;
-            checkAllComplete();
-        };
-
-        const script = document.createElement('script');
-        const base =
-            `https://docs.google.com/spreadsheets/d/${sheet.sheetId}/gviz/tq`;
-
-        const params = [
-            useGid ? `gid=${encodeURIComponent(sheet.gid)}` : '',
-            'headers=0',
-            `tqx=${encodeURIComponent('out:json;responseHandler:' + callbackName)}`,
-            `_=${Date.now()}`
-        ].filter(Boolean).join('&');
-
-        script.src = `${base}?${params}`;
-        script.onerror = () => finishFailure('Unable to load Google Sheets data');
-        document.body.appendChild(script);
-
-        timer = setTimeout(() => {
-            finishFailure('Google Sheets request timed out');
-        }, 12000);
-    }
-
-    function cellText(cell) {
-        if (!cell) return '';
-        if (cell.f !== null && cell.f !== undefined && String(cell.f).trim() !== '') {
-            return String(cell.f).trim();
-        }
-        if (cell.v !== null && cell.v !== undefined) {
-            return String(cell.v).trim();
-        }
-        return '';
-    }
-
-    function normalizeHeader(text) {
-        return String(text || '')
-            .trim()
-            .toUpperCase()
-            .replace(/[_\n\r]+/g, ' ')
-            .replace(/\s+/g, ' ');
-    }
-
-    function detectHeaderRow(rows) {
-        const wanted = [
-            'DATE',
-            'REPORTING MONTH',
-            'TASK',
-            'PROJECT',
-            'ESTIMATED',
-            'ACTUAL',
-            'STATUS'
-        ];
-
-        let bestIndex = -1;
-        let bestScore = 0;
-
-        for (let r = 0; r < Math.min(rows.length, 12); r++) {
-            const cells = (rows[r] && rows[r].c) || [];
-            const texts = cells.map(cell => normalizeHeader(cellText(cell)));
-
-            let score = 0;
-
-            wanted.forEach(term => {
-                if (texts.some(t => t === term || t.includes(term))) {
-                    score++;
-                }
+            table.cols.forEach((col, idx) => {
+                let label = (col.label || '').toUpperCase();
+                if (label === 'DATE' || (label.includes('DATE') && !label.includes('UPDATED'))) colMap.date = idx;
+                if (label.includes('REPORTING MONTH')) colMap.month = idx;
+                if (label.includes('TASK')) colMap.task = idx;
+                if (label.includes('PROJECT')) colMap.project = idx;
+                if (label.includes('ESTIMATED')) colMap.est = idx;
+                if (label.includes('ACTUAL')) colMap.act = idx;
+                if (label.includes('STATUS')) colMap.status = idx;
             });
 
-            if (score > bestScore) {
-                bestScore = score;
-                bestIndex = r;
-            }
-        }
+            rows.forEach(r => {
+                let c = r.c;
+                if (!c) return;
 
-        return bestScore >= 3 ? bestIndex : -1;
-    }
+                let task = (c[colMap.task] && c[colMap.task].v) ? String(c[colMap.task].v) : '';
+                if (!task || task.toLowerCase() === 'sunday') return;
 
-    function buildColumnMap(headerCells) {
-        const headers = headerCells.map(cell => normalizeHeader(cellText(cell)));
-
-        const findIndex = (tests) => {
-            for (let i = 0; i < headers.length; i++) {
-                const h = headers[i];
-                if (tests.some(test => test(h))) return i;
-            }
-            return -1;
-        };
-
-        return {
-            date: findIndex([
-                h => h === 'DATE',
-                h => h.includes('TASK DATE'),
-                h => h.includes('SCHEDULE DATE'),
-                h => h.includes('DUE DATE') && !h.includes('UPDATED')
-            ]),
-            month: findIndex([
-                h => h.includes('REPORTING MONTH'),
-                h => h === 'MONTH',
-                h => h.includes('MONTH YEAR')
-            ]),
-            task: findIndex([
-                h => h === 'TASK',
-                h => h.includes('TASK NAME'),
-                h => h.includes('TASK DESCRIPTION'),
-                h => h.includes('ACTIVITY')
-            ]),
-            project: findIndex([
-                h => h === 'PROJECT',
-                h => h.includes('PROJECT NAME')
-            ]),
-            est: findIndex([
-                h => h.includes('ESTIMATED') && h.includes('HOUR'),
-                h => h.includes('PLANNED') && h.includes('HOUR'),
-                h => h === 'EST HRS'
-            ]),
-            act: findIndex([
-                h => h.includes('ACTUAL') && h.includes('HOUR'),
-                h => h === 'ACT HRS'
-            ]),
-            status: findIndex([
-                h => h === 'STATUS',
-                h => h.includes('TASK STATUS')
-            ])
-        };
-    }
-
-    function normalizeDateDisplay(value) {
-        const text = String(value || '').trim();
-        if (!text) return '';
-
-        if (text.includes('Date(')) {
-            const parts = text.match(/\d+/g);
-            if (parts && parts.length >= 3) {
-                const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-                const d = String(Number(parts[2])).padStart(2, '0');
-                const m = months[Number(parts[1])];
-                const y = parts[0];
-                return `${d}-${m}-${y}`;
-            }
-        }
-
-        const parsed = parseDateObj(text);
-        if (parsed && !isNaN(parsed.getTime())) {
-            const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-            return `${String(parsed.getDate()).padStart(2,'0')}-${months[parsed.getMonth()]}-${parsed.getFullYear()}`;
-        }
-
-        return text;
-    }
-
-    function normalizeReportingMonth(value) {
-        const text = String(value || '').trim();
-        if (!text) return '';
-
-        const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-
-        // Google GViz raw date: Date(2026,8,1)
-        if (text.includes('Date(')) {
-            const parts = text.match(/\d+/g);
-            if (parts && parts.length >= 2) {
-                return `${months[Number(parts[1])]} ${parts[0]}`;
-            }
-        }
-
-        // Already "Sep 2026" / "September 2026"
-        let m = text.match(/^([A-Za-z]{3,9})\s+(\d{4})$/);
-        if (m) {
-            const key = m[1].slice(0,3).toLowerCase();
-            const map = {jan:'Jan',feb:'Feb',mar:'Mar',apr:'Apr',may:'May',jun:'Jun',jul:'Jul',aug:'Aug',sep:'Sep',oct:'Oct',nov:'Nov',dec:'Dec'};
-            if (map[key]) return `${map[key]} ${m[2]}`;
-        }
-
-        // Any full date accidentally sitting in Reporting Month, e.g. 1-Sep-2026.
-        const parsed = parseDateObj(text);
-        if (parsed && !isNaN(parsed.getTime())) {
-            return `${months[parsed.getMonth()]} ${parsed.getFullYear()}`;
-        }
-
-        return text;
-    }
-
-    function processSingleSheetResponse(response, sourceName) {
-        try {
-            if (!response || response.status === 'error' || !response.table) {
-                return { ok:false, reason:'Google Sheets returned an error' };
-            }
-
-            const rows = Array.isArray(response.table.rows) ? response.table.rows : [];
-            if (!rows.length) {
-                return { ok:false, reason:'Sheet returned no rows' };
-            }
-
-            const headerRowIndex = detectHeaderRow(rows);
-
-            let colMap;
-            let dataStart;
-
-            if (headerRowIndex >= 0) {
-                const headerCells = (rows[headerRowIndex] && rows[headerRowIndex].c) || [];
-                colMap = buildColumnMap(headerCells);
-                dataStart = headerRowIndex + 1;
-            } else {
-                // Last-resort compatibility with the original dashboard layout.
-                colMap = { date:0, month:1, task:2, project:3, est:4, act:5, status:9 };
-                dataStart = 0;
-            }
-
-            if (colMap.task < 0) {
-                return { ok:false, reason:'Task column could not be identified' };
-            }
-
-            let added = 0;
-
-            for (let r = dataStart; r < rows.length; r++) {
-                const c = (rows[r] && rows[r].c) || [];
-
-                const task = cellText(c[colMap.task]);
-                if (!task || task.toLowerCase() === 'sunday') continue;
-
-                const rawDate = colMap.date >= 0 ? cellText(c[colMap.date]) : '';
-                const dateStr = normalizeDateDisplay(rawDate);
-
-                let rawMonth = colMap.month >= 0 ? cellText(c[colMap.month]) : '';
-                let monthVal = normalizeReportingMonth(rawMonth);
-
-                // If Reporting Month is blank, derive it from task date.
-                if (!monthVal && dateStr) {
-                    const d = parseDateObj(dateStr);
-                    if (d && !isNaN(d.getTime())) {
-                        const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-                        monthVal = `${months[d.getMonth()]} ${d.getFullYear()}`;
+                let dateStr = '';
+                if (c[colMap.date]) {
+                    dateStr = c[colMap.date].f || c[colMap.date].v || '';
+                    if (String(dateStr).includes('Date(')) {
+                        let parts = String(dateStr).match(/\d+/g);
+                        if (parts && parts.length >= 3) {
+                            let months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+                            let d = String(parts[2]).padStart(2, '0');
+                            let m = months[parseInt(parts[1])];
+                            let y = parts[0];
+                            dateStr = `${d}-${m}-${y}`;
+                        }
                     }
                 }
 
-                const estText = colMap.est >= 0 ? cellText(c[colMap.est]) : '';
-                const actText = colMap.act >= 0 ? cellText(c[colMap.act]) : '';
+                let monthVal = '';
+                if (c[colMap.month]) {
+                    monthVal = c[colMap.month].f || c[colMap.month].v || '';
+                    if (String(monthVal).includes('Date(')) {
+                        let parts = String(monthVal).match(/\d+/g);
+                        if (parts && parts.length >= 2) {
+                            let months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+                            monthVal = `${months[parseInt(parts[1])]} ${parts[0]}`;
+                        }
+                    }
+                }
 
-                const estVal = parseFloat(String(estText).replace(/,/g,'')) || 0;
-                const actVal = parseFloat(String(actText).replace(/,/g,'')) || 0;
-
-                let statusVal =
-                    colMap.status >= 0
-                        ? cellText(c[colMap.status])
-                        : 'Not Started';
-
-                if (!statusVal) statusVal = 'Not Started';
-
-                const statusKey = statusVal.toLowerCase().replace(/\s+/g,' ').trim();
-                if (statusKey === 'in progress' || statusKey === 'in-progress') statusVal = 'In-Progress';
-                else if (statusKey === 'completed' || statusKey === 'complete') statusVal = 'Completed';
-                else if (statusKey === 'not started' || statusKey === 'not-started') statusVal = 'Not Started';
+                let estVal = c[colMap.est] ? parseFloat(c[colMap.est].v) || 0 : 0;
+                let actVal = c[colMap.act] ? parseFloat(c[colMap.act].v) || 0 : 0;
+                let statusVal = c[colMap.status] && c[colMap.status].v ? String(c[colMap.status].v) : 'Not Started';
 
                 rawData.push({
                     SOURCE_SHEET: sourceName,
-                    DATE_STR: dateStr,
-                    REPORTING_MONTH: monthVal,
+                    DATE_STR: String(dateStr),
+                    REPORTING_MONTH: String(monthVal),
                     TASK: task,
-                    PROJECT:
-                        colMap.project >= 0 && cellText(c[colMap.project])
-                            ? cellText(c[colMap.project])
-                            : 'Dheemahi Ayur',
+                    PROJECT: c[colMap.project] && c[colMap.project].v ? String(c[colMap.project].v) : 'Dheemahi Ayur',
                     Category: categorize(task),
                     'ESTIMATED HOURS': estVal,
                     'ACTUAL HOURS': actVal,
                     STATUS: statusVal
                 });
-
-                added++;
-            }
-
-            if (!added) {
-                return {
-                    ok:false,
-                    reason:`No task rows detected. Header row: ${headerRowIndex >= 0 ? headerRowIndex + 1 : 'not detected'}`
-                };
-            }
-
-            return { ok:true, added };
-        } catch (error) {
-            console.error(`Processing failed for ${sourceName}:`, error);
-            return { ok:false, reason:String(error && error.message ? error.message : error) };
+            });
         }
+        completedFetches++;
+        checkAllComplete();
     }
 
     function checkAllComplete() {
-        if (completedFetches < sheetsToFetch.length) return;
-
-        const status = document.getElementById('syncStatus');
-        const warning = document.getElementById('loadWarning');
-
-        if (successfulFetches === sheetsToFetch.length) {
-            status.innerText = `✓ Synced ${successfulFetches} Sheets`;
-            status.style.color = '#2ecc71';
-        } else if (successfulFetches > 0) {
-            status.innerText = `⚠ Synced ${successfulFetches}/${sheetsToFetch.length} Sheets`;
-            status.style.color = '#e67e22';
-            warning.style.display = 'block';
-            warning.textContent = 'Some resource sheets could not be loaded. ' + fetchErrors.join(' | ');
-        } else {
-            status.innerText = '✕ Resource sheets not loaded';
-            status.style.color = '#e74c3c';
-            warning.style.display = 'block';
-            warning.textContent = 'No Google Sheet data could be loaded. ' + fetchErrors.join(' | ');
+        if (completedFetches >= sheetsToFetch.length) {
+            document.getElementById('syncStatus').innerText = `✓ Synced ${sheetsToFetch.length} Sheets`;
+            document.getElementById('syncStatus').style.color = '#2ecc71';
+            buildTabs();
+            buildMonthFilter();
+            render();
         }
-
-        buildTabs();
-        buildMonthFilter();
-        render();
     }
 
     function monthValue(monthText) {
         if (!monthText) return 0;
-
-        const normalized = normalizeReportingMonth(monthText);
-        const parts = String(normalized).trim().split(/\s+/);
-
-        if (parts.length >= 2) {
-            const months = {Jan:0,Feb:1,Mar:2,Apr:3,May:4,Jun:5,Jul:6,Aug:7,Sep:8,Oct:9,Nov:10,Dec:11};
-            const m = months[parts[0]];
-            const y = parseInt(parts[1], 10);
-            if (m !== undefined && !isNaN(y)) return new Date(y, m, 1).getTime();
-        }
-
-        const parsed = parseDateObj(String(monthText));
-        return parsed && !isNaN(parsed.getTime())
-            ? new Date(parsed.getFullYear(), parsed.getMonth(), 1).getTime()
-            : 0;
+        const parts = String(monthText).trim().split(/\s+/);
+        if (parts.length < 2) return 0;
+        const months = {Jan:0,Feb:1,Mar:2,Apr:3,May:4,Jun:5,Jul:6,Aug:7,Sep:8,Oct:9,Nov:10,Dec:11};
+        const m = months[parts[0]];
+        const y = parseInt(parts[1], 10);
+        return (m === undefined || isNaN(y)) ? 0 : new Date(y, m, 1).getTime();
     }
-
-    function monthLabelForSelector(value) {
-        const text = String(value || '').trim();
-        if (!text) return '';
-
-        const monthNames = {
-            jan:'Jan', feb:'Feb', mar:'Mar', apr:'Apr',
-            may:'May', jun:'Jun', jul:'Jul', aug:'Aug',
-            sep:'Sep', oct:'Oct', nov:'Nov', dec:'Dec'
-        };
-
-        // Convert only full dates with a named month:
-        // 1-Sep-2026, 01-Sep-2026, 1 Sep 2026, etc.
-        let m = text.match(/^(\d{1,2})[\s\/-]+([A-Za-z]{3,9})[\s\/-]+(20\d{2})$/);
-
-        if (m) {
-            const key = m[2].slice(0,3).toLowerCase();
-            if (monthNames[key]) {
-                return `${monthNames[key]} ${m[3]}`;
-            }
-        }
-
-        // Convert numeric full dates such as 01/09/2026.
-        m = text.match(/^(\d{1,2})[\/-](\d{1,2})[\/-](20\d{2})$/);
-
-        if (m) {
-            const monthNumber = Number(m[2]);
-            const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-
-            if (monthNumber >= 1 && monthNumber <= 12) {
-                return `${months[monthNumber - 1]} ${m[3]}`;
-            }
-        }
-
-        // Keep normal values such as "Jun 2026", "Jul 2026", "Aug 2026" unchanged.
-        return text;
-    }
-
 
     function buildMonthFilter() {
         const select = document.getElementById('monthFilter');
         const currentValue = select.value;
 
-        const months = [
-            ...new Set(
-                rawData
-                    .map(d => monthLabelForSelector(d.REPORTING_MONTH))
-                    .filter(Boolean)
-            )
-        ].sort((a, b) => monthValue(a) - monthValue(b));
+        const months = [...new Set(
+            rawData
+                .map(d => String(d.REPORTING_MONTH || '').trim())
+                .filter(Boolean)
+                .filter(m => {
+                    /*
+                      Reporting Month must be a MONTH label, not a full date.
+                      Keep normal values such as:
+                        Jun 2026
+                        Jul 2026
+                        Aug 2026
+                        Sep 2026
+
+                      Remove accidental full-date values such as:
+                        1-Sep-2026
+                        01-Sep-2026
+                        01/09/2026
+                    */
+                    const fullNamedDate =
+                        /^\d{1,2}[\s\/-]+[A-Za-z]{3,9}[\s\/-]+\d{4}$/.test(m);
+
+                    const fullNumericDate =
+                        /^\d{1,2}[\/-]\d{1,2}[\/-]\d{4}$/.test(m);
+
+                    return !fullNamedDate && !fullNumericDate;
+                })
+        )].sort((a, b) => monthValue(a) - monthValue(b));
 
         select.innerHTML =
             '<option value="ALL">All Months</option>' +
             months.map(m => `<option value="${m}">${m}</option>`).join('');
 
-        const normalizedCurrent =
-            currentValue === 'ALL'
-                ? 'ALL'
-                : monthLabelForSelector(currentValue);
-
         if (
-            normalizedCurrent &&
+            currentValue &&
             (
-                normalizedCurrent === 'ALL' ||
-                months.includes(normalizedCurrent)
+                currentValue === 'ALL' ||
+                months.includes(currentValue)
             )
         ) {
-            select.value = normalizedCurrent;
+            select.value = currentValue;
         } else if (months.length) {
             select.value = months[months.length - 1];
         }
@@ -917,9 +592,7 @@
 
         const tabFiltered = rawData.filter(d => {
             const matchTab = currentTab === 'SUMMARY' || d.SOURCE_SHEET === currentTab;
-            const matchMonth =
-                monthFilter === 'ALL' ||
-                monthLabelForSelector(d.REPORTING_MONTH) === monthFilter;
+            const matchMonth = monthFilter === 'ALL' || d.REPORTING_MONTH === monthFilter;
             return matchTab && matchMonth;
         });
 
@@ -1195,10 +868,7 @@
         const selectedMonth = document.getElementById('monthFilter').value;
         let allResTasks = rawData.filter(d =>
             d.SOURCE_SHEET === currentTab &&
-            (
-                selectedMonth === 'ALL' ||
-                monthLabelForSelector(d.REPORTING_MONTH) === selectedMonth
-            )
+            (selectedMonth === 'ALL' || d.REPORTING_MONTH === selectedMonth)
         );
         allResTasks.forEach(d => { resDateMap[d.DATE_STR] = (resDateMap[d.DATE_STR] || 0) + d['ESTIMATED HOURS']; });
         
