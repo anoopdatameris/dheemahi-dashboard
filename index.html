@@ -468,11 +468,41 @@
                 let monthVal = '';
                 if (c[colMap.month]) {
                     monthVal = c[colMap.month].f || c[colMap.month].v || '';
+
+                    const monthNames = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+
                     if (String(monthVal).includes('Date(')) {
                         let parts = String(monthVal).match(/\d+/g);
                         if (parts && parts.length >= 2) {
-                            let months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-                            monthVal = `${months[parseInt(parts[1])]} ${parts[0]}`;
+                            monthVal = `${monthNames[parseInt(parts[1], 10)]} ${parts[0]}`;
+                        }
+                    } else {
+                        const text = String(monthVal).trim();
+
+                        // Full named date: 1-Sep-2026 / 01-Sep-2026 / 1 Sep 2026
+                        let m = text.match(/^(\d{1,2})[\s\/-]+([A-Za-z]{3,9})[\s\/-]+(20\d{2})$/);
+
+                        if (m) {
+                            const key = m[2].slice(0,3).toLowerCase();
+                            const map = {
+                                jan:'Jan', feb:'Feb', mar:'Mar', apr:'Apr',
+                                may:'May', jun:'Jun', jul:'Jul', aug:'Aug',
+                                sep:'Sep', oct:'Oct', nov:'Nov', dec:'Dec'
+                            };
+
+                            if (map[key]) {
+                                monthVal = `${map[key]} ${m[3]}`;
+                            }
+                        } else {
+                            // Numeric full date: 01/09/2026 or 01-09-2026
+                            m = text.match(/^(\d{1,2})[\/-](\d{1,2})[\/-](20\d{2})$/);
+
+                            if (m) {
+                                const monthNumber = Number(m[2]);
+                                if (monthNumber >= 1 && monthNumber <= 12) {
+                                    monthVal = `${monthNames[monthNumber - 1]} ${m[3]}`;
+                                }
+                            }
                         }
                     }
                 }
@@ -523,44 +553,14 @@
         const currentValue = select.value;
 
         const months = [...new Set(
-            rawData
-                .map(d => String(d.REPORTING_MONTH || '').trim())
-                .filter(Boolean)
-                .filter(m => {
-                    /*
-                      Reporting Month must be a MONTH label, not a full date.
-                      Keep normal values such as:
-                        Jun 2026
-                        Jul 2026
-                        Aug 2026
-                        Sep 2026
-
-                      Remove accidental full-date values such as:
-                        1-Sep-2026
-                        01-Sep-2026
-                        01/09/2026
-                    */
-                    const fullNamedDate =
-                        /^\d{1,2}[\s\/-]+[A-Za-z]{3,9}[\s\/-]+\d{4}$/.test(m);
-
-                    const fullNumericDate =
-                        /^\d{1,2}[\/-]\d{1,2}[\/-]\d{4}$/.test(m);
-
-                    return !fullNamedDate && !fullNumericDate;
-                })
+            rawData.map(d => d.REPORTING_MONTH).filter(Boolean)
         )].sort((a, b) => monthValue(a) - monthValue(b));
 
         select.innerHTML =
             '<option value="ALL">All Months</option>' +
             months.map(m => `<option value="${m}">${m}</option>`).join('');
 
-        if (
-            currentValue &&
-            (
-                currentValue === 'ALL' ||
-                months.includes(currentValue)
-            )
-        ) {
+        if (currentValue && (currentValue === 'ALL' || months.includes(currentValue))) {
             select.value = currentValue;
         } else if (months.length) {
             select.value = months[months.length - 1];
