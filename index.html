@@ -538,106 +538,133 @@
         }
     }
 
-    function canonicalReportingMonth(value) {
-        const text = String(value || '').trim();
+    function reportingMonthKey(value) {
+        const text = String(value || '')
+            .replace(/\u00A0/g, ' ')
+            .trim();
+
         if (!text) return '';
 
-        const map = {
-            jan:'Jan', january:'Jan',
-            feb:'Feb', february:'Feb',
-            mar:'Mar', march:'Mar',
-            apr:'Apr', april:'Apr',
-            may:'May',
-            jun:'Jun', june:'Jun',
-            jul:'Jul', july:'Jul',
-            aug:'Aug', august:'Aug',
-            sep:'Sept', sept:'Sept', september:'Sept',
-            oct:'Oct', october:'Oct',
-            nov:'Nov', november:'Nov',
-            dec:'Dec', december:'Dec'
+        const monthMap = {
+            jan:1, january:1,
+            feb:2, february:2,
+            mar:3, march:3,
+            apr:4, april:4,
+            may:5,
+            jun:6, june:6,
+            jul:7, july:7,
+            aug:8, august:8,
+            sep:9, sept:9, september:9,
+            oct:10, october:10,
+            nov:11, november:11,
+            dec:12, december:12
         };
 
-        // Month + year: "Sep 2026", "Sept 2026", "Sep-2026", etc.
-        let m = text.match(/^([A-Za-z]{3,9})[\s-]+(20\d{2})$/);
+        // Month + year: Sep 2026 / Sept-2026 / September 2026
+        let m = text.match(/^([A-Za-z]{3,9})[\s\-–—]+(20\d{2})$/);
         if (m) {
-            const key = m[1].toLowerCase();
-            if (map[key]) {
-                return `${map[key]}-${m[2]}`;
-            }
+            const mn = monthMap[m[1].toLowerCase()];
+            if (mn) return `${m[2]}-${String(mn).padStart(2,'0')}`;
         }
 
-        // Full named date: "1-Sep-2026", "01 Sept 2026", etc.
-        m = text.match(/^\d{1,2}[\s\/-]+([A-Za-z]{3,9})[\s\/-]+(20\d{2})$/);
+        // Full named date: 1-Sep-2026 / 01 Sept 2026
+        m = text.match(/^\d{1,2}[\s\/\-–—]+([A-Za-z]{3,9})[\s\/\-–—]+(20\d{2})$/);
         if (m) {
-            const key = m[1].toLowerCase();
-            if (map[key]) {
-                return `${map[key]}-${m[2]}`;
-            }
+            const mn = monthMap[m[1].toLowerCase()];
+            if (mn) return `${m[2]}-${String(mn).padStart(2,'0')}`;
         }
 
-        // Numeric full date: 01/09/2026
-        m = text.match(/^\d{1,2}[\/-](\d{1,2})[\/-](20\d{2})$/);
+        // Numeric date: 01/09/2026 or 01-09-2026
+        m = text.match(/^\d{1,2}[\/\-](\d{1,2})[\/\-](20\d{2})$/);
         if (m) {
-            const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sept','Oct','Nov','Dec'];
             const mn = Number(m[1]);
             if (mn >= 1 && mn <= 12) {
-                return `${months[mn - 1]}-${m[2]}`;
+                return `${m[2]}-${String(mn).padStart(2,'0')}`;
             }
         }
 
-        return text;
+        // Google GViz Date(2026,8,1)
+        if (text.includes('Date(')) {
+            const parts = text.match(/\d+/g);
+            if (parts && parts.length >= 2) {
+                const year = Number(parts[0]);
+                const month = Number(parts[1]) + 1;
+                if (year && month >= 1 && month <= 12) {
+                    return `${year}-${String(month).padStart(2,'0')}`;
+                }
+            }
+        }
+
+        return '';
+    }
+
+    function reportingMonthLabel(key) {
+        const m = String(key || '').match(/^(20\d{2})-(\d{2})$/);
+        if (!m) return String(key || '');
+
+        const months = [
+            'Jan','Feb','Mar','Apr','May','Jun',
+            'Jul','Aug','Sept','Oct','Nov','Dec'
+        ];
+
+        const monthIndex = Number(m[2]) - 1;
+
+        return monthIndex >= 0 && monthIndex < 12
+            ? `${months[monthIndex]}-${m[1]}`
+            : String(key || '');
     }
 
 
     function monthValue(monthText) {
-        if (!monthText) return 0;
-
-        const canonical = canonicalReportingMonth(monthText);
-        const m = String(canonical).match(/^([A-Za-z]{3,4})-(20\d{2})$/);
+        const key = reportingMonthKey(monthText);
+        const m = key.match(/^(20\d{2})-(\d{2})$/);
 
         if (!m) return 0;
 
-        const months = {
-            Jan:0, Feb:1, Mar:2, Apr:3, May:4, Jun:5,
-            Jul:6, Aug:7, Sept:8, Oct:9, Nov:10, Dec:11
-        };
-
-        const monthIndex = months[m[1]];
-        const year = Number(m[2]);
-
-        return monthIndex === undefined
-            ? 0
-            : new Date(year, monthIndex, 1).getTime();
+        return new Date(
+            Number(m[1]),
+            Number(m[2]) - 1,
+            1
+        ).getTime();
     }
 
     function buildMonthFilter() {
         const select = document.getElementById('monthFilter');
 
-        const currentValue =
+        const currentKey =
             select.value === 'ALL'
                 ? 'ALL'
-                : canonicalReportingMonth(select.value);
+                : reportingMonthKey(select.value);
 
-        const months = [...new Set(
-            rawData
-                .map(d => canonicalReportingMonth(d.REPORTING_MONTH))
-                .filter(Boolean)
-        )].sort((a, b) => monthValue(a) - monthValue(b));
+        // Use YYYY-MM as the option VALUE.
+        // This guarantees one option per calendar month, even if the sheet
+        // contains Sep 2026 / Sept-2026 / 1-Sep-2026 / non-breaking spaces.
+        const monthKeys = [
+            ...new Set(
+                rawData
+                    .map(d => reportingMonthKey(d.REPORTING_MONTH))
+                    .filter(Boolean)
+            )
+        ].sort();
 
         select.innerHTML =
             '<option value="ALL">All Months</option>' +
-            months.map(m => `<option value="${m}">${m}</option>`).join('');
+            monthKeys
+                .map(key =>
+                    `<option value="${key}">${reportingMonthLabel(key)}</option>`
+                )
+                .join('');
 
         if (
-            currentValue &&
+            currentKey &&
             (
-                currentValue === 'ALL' ||
-                months.includes(currentValue)
+                currentKey === 'ALL' ||
+                monthKeys.includes(currentKey)
             )
         ) {
-            select.value = currentValue;
-        } else if (months.length) {
-            select.value = months[months.length - 1];
+            select.value = currentKey;
+        } else if (monthKeys.length) {
+            select.value = monthKeys[monthKeys.length - 1];
         }
     }
 
@@ -668,7 +695,7 @@
             const matchTab = currentTab === 'SUMMARY' || d.SOURCE_SHEET === currentTab;
             const matchMonth =
                 monthFilter === 'ALL' ||
-                canonicalReportingMonth(d.REPORTING_MONTH) === monthFilter;
+                reportingMonthKey(d.REPORTING_MONTH) === monthFilter;
             return matchTab && matchMonth;
         });
 
@@ -946,7 +973,7 @@
             d.SOURCE_SHEET === currentTab &&
             (
                 selectedMonth === 'ALL' ||
-                canonicalReportingMonth(d.REPORTING_MONTH) === selectedMonth
+                reportingMonthKey(d.REPORTING_MONTH) === selectedMonth
             )
         );
         allResTasks.forEach(d => { resDateMap[d.DATE_STR] = (resDateMap[d.DATE_STR] || 0) + d['ESTIMATED HOURS']; });
