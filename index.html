@@ -556,9 +556,32 @@
             rawData.map(d => d.REPORTING_MONTH).filter(Boolean)
         )].sort((a, b) => monthValue(a) - monthValue(b));
 
+        const monthDisplay = value => {
+            const parts = String(value || '').trim().split(/\s+/);
+
+            if (parts.length >= 2) {
+                const map = {
+                    Jan:'Jan', Feb:'Feb', Mar:'Mar', Apr:'Apr',
+                    May:'May', Jun:'Jun', Jul:'Jul', Aug:'Aug',
+                    Sep:'Sep', Sept:'Sep', Oct:'Oct', Nov:'Nov', Dec:'Dec'
+                };
+
+                const mon = map[parts[0]] || parts[0];
+                const year = parts[1];
+
+                if (/^\d{4}$/.test(year)) {
+                    return `${mon}-${year}`;
+                }
+            }
+
+            return String(value || '');
+        };
+
         select.innerHTML =
             '<option value="ALL">All Months</option>' +
-            months.map(m => `<option value="${m}">${m}</option>`).join('');
+            months
+                .map(m => `<option value="${m}">${monthDisplay(m)}</option>`)
+                .join('');
 
         if (currentValue && (currentValue === 'ALL' || months.includes(currentValue))) {
             select.value = currentValue;
