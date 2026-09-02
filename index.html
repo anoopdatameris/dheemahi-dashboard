@@ -646,29 +646,6 @@
         if (!text) return '';
 
         const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-        const monthMap = {
-            jan:'Jan', feb:'Feb', mar:'Mar', apr:'Apr',
-            may:'May', jun:'Jun', jul:'Jul', aug:'Aug',
-            sep:'Sep', oct:'Oct', nov:'Nov', dec:'Dec'
-        };
-
-        // Explicitly convert full dates such as 1-Sep-2026 / 01-Sep-2026.
-        let m = text.match(/^(\d{1,2})[-\/]([A-Za-z]{3,9})[-\/](\d{4})$/);
-        if (m) {
-            const key = m[2].slice(0,3).toLowerCase();
-            if (monthMap[key]) {
-                return `${monthMap[key]} ${m[3]}`;
-            }
-        }
-
-        // Numeric full date such as 01/09/2026.
-        m = text.match(/^(\d{1,2})[\/-](\d{1,2})[\/-](\d{4})$/);
-        if (m) {
-            const monthNumber = Number(m[2]);
-            if (monthNumber >= 1 && monthNumber <= 12) {
-                return `${months[monthNumber - 1]} ${m[3]}`;
-            }
-        }
 
         // Google GViz raw date: Date(2026,8,1)
         if (text.includes('Date(')) {
@@ -678,13 +655,18 @@
             }
         }
 
-        // Already canonical: Sep 2026 / September 2026.
-        m = text.match(/^([A-Za-z]{3,9})\s+(\d{4})$/);
+        // Already "Sep 2026" / "September 2026"
+        let m = text.match(/^([A-Za-z]{3,9})\s+(\d{4})$/);
         if (m) {
             const key = m[1].slice(0,3).toLowerCase();
-            if (monthMap[key]) {
-                return `${monthMap[key]} ${m[2]}`;
-            }
+            const map = {jan:'Jan',feb:'Feb',mar:'Mar',apr:'Apr',may:'May',jun:'Jun',jul:'Jul',aug:'Aug',sep:'Sep',oct:'Oct',nov:'Nov',dec:'Dec'};
+            if (map[key]) return `${map[key]} ${m[2]}`;
+        }
+
+        // Any full date accidentally sitting in Reporting Month, e.g. 1-Sep-2026.
+        const parsed = parseDateObj(text);
+        if (parsed && !isNaN(parsed.getTime())) {
+            return `${months[parsed.getMonth()]} ${parsed.getFullYear()}`;
         }
 
         return text;
@@ -838,125 +820,75 @@
             : 0;
     }
 
-    function canonicalMonthLabel(value) {
+    function monthLabelForSelector(value) {
         const text = String(value || '').trim();
         if (!text) return '';
 
-        const monthMap = {
+        const monthNames = {
             jan:'Jan', feb:'Feb', mar:'Mar', apr:'Apr',
             may:'May', jun:'Jun', jul:'Jul', aug:'Aug',
             sep:'Sep', oct:'Oct', nov:'Nov', dec:'Dec'
         };
 
-        // Catch ANY value containing a month name + 4-digit year,
-        // including "1-Sep-2026", "01 Sep 2026", "Sep-1-2026",
-        // and values with time text appended.
-        const named =
-            text.match(/(?:^|[^A-Za-z])(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[A-Za-z]*(?:[^0-9]+)(20\d{2})(?:$|[^0-9])/i)
-            ||
-            text.match(/(20\d{2})(?:[^A-Za-z]+)(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[A-Za-z]*/i);
+        // Convert only full dates with a named month:
+        // 1-Sep-2026, 01-Sep-2026, 1 Sep 2026, etc.
+        let m = text.match(/^(\d{1,2})[\s\/-]+([A-Za-z]{3,9})[\s\/-]+(20\d{2})$/);
 
-        if (named) {
-            let monthText;
-            let yearText;
-
-            if (/^20\d{2}$/.test(named[1] || '')) {
-                yearText = named[1];
-                monthText = named[2];
-            } else {
-                monthText = named[1];
-                yearText = named[2];
-            }
-
-            const key = String(monthText).slice(0,3).toLowerCase();
-
-            if (monthMap[key] && yearText) {
-                return `${monthMap[key]} ${yearText}`;
+        if (m) {
+            const key = m[2].slice(0,3).toLowerCase();
+            if (monthNames[key]) {
+                return `${monthNames[key]} ${m[3]}`;
             }
         }
 
-        // Explicit dd/mm/yyyy or dd-mm-yyyy.
-        const numeric =
-            text.match(/^(\d{1,2})[\/-](\d{1,2})[\/-](20\d{2})(?:\s.*)?$/);
+        // Convert numeric full dates such as 01/09/2026.
+        m = text.match(/^(\d{1,2})[\/-](\d{1,2})[\/-](20\d{2})$/);
 
-        if (numeric) {
-            const monthNumber = Number(numeric[2]);
+        if (m) {
+            const monthNumber = Number(m[2]);
             const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 
             if (monthNumber >= 1 && monthNumber <= 12) {
-                return `${months[monthNumber - 1]} ${numeric[3]}`;
+                return `${months[monthNumber - 1]} ${m[3]}`;
             }
         }
 
-        // Already canonical "Sep 2026".
-        const simple =
-            text.match(/^([A-Za-z]{3,9})\s+(20\d{2})$/);
-
-        if (simple) {
-            const key =
-                simple[1].slice(0,3).toLowerCase();
-
-            if (monthMap[key]) {
-                return `${monthMap[key]} ${simple[2]}`;
-            }
-        }
-
-        // Last fallback: use the existing normalizer.
-        return normalizeReportingMonth(text);
+        // Keep normal values such as "Jun 2026", "Jul 2026", "Aug 2026" unchanged.
+        return text;
     }
 
 
     function buildMonthFilter() {
         const select = document.getElementById('monthFilter');
-
-        const currentValue =
-            select.value === 'ALL'
-                ? 'ALL'
-                : canonicalMonthLabel(select.value);
-
-        rawData.forEach(d => {
-            d.REPORTING_MONTH =
-                canonicalMonthLabel(
-                    d.REPORTING_MONTH
-                );
-        });
+        const currentValue = select.value;
 
         const months = [
             ...new Set(
                 rawData
-                    .map(d =>
-                        canonicalMonthLabel(
-                            d.REPORTING_MONTH
-                        )
-                    )
+                    .map(d => monthLabelForSelector(d.REPORTING_MONTH))
                     .filter(Boolean)
             )
-        ].sort((a, b) =>
-            monthValue(a) -
-            monthValue(b)
-        );
+        ].sort((a, b) => monthValue(a) - monthValue(b));
 
         select.innerHTML =
             '<option value="ALL">All Months</option>' +
-            months
-                .map(m =>
-                    `<option value="${m}">${m}</option>`
-                )
-                .join('');
+            months.map(m => `<option value="${m}">${m}</option>`).join('');
+
+        const normalizedCurrent =
+            currentValue === 'ALL'
+                ? 'ALL'
+                : monthLabelForSelector(currentValue);
 
         if (
-            currentValue &&
+            normalizedCurrent &&
             (
-                currentValue === 'ALL' ||
-                months.includes(currentValue)
+                normalizedCurrent === 'ALL' ||
+                months.includes(normalizedCurrent)
             )
         ) {
-            select.value = currentValue;
+            select.value = normalizedCurrent;
         } else if (months.length) {
-            select.value =
-                months[
-                    months.length - 1
-                ];
+            select.value = months[months.length - 1];
         }
     }
 
@@ -987,7 +919,7 @@
             const matchTab = currentTab === 'SUMMARY' || d.SOURCE_SHEET === currentTab;
             const matchMonth =
                 monthFilter === 'ALL' ||
-                canonicalMonthLabel(d.REPORTING_MONTH) === canonicalMonthLabel(monthFilter);
+                monthLabelForSelector(d.REPORTING_MONTH) === monthFilter;
             return matchTab && matchMonth;
         });
 
@@ -1265,7 +1197,7 @@
             d.SOURCE_SHEET === currentTab &&
             (
                 selectedMonth === 'ALL' ||
-                canonicalMonthLabel(d.REPORTING_MONTH) === canonicalMonthLabel(selectedMonth)
+                monthLabelForSelector(d.REPORTING_MONTH) === selectedMonth
             )
         );
         allResTasks.forEach(d => { resDateMap[d.DATE_STR] = (resDateMap[d.DATE_STR] || 0) + d['ESTIMATED HOURS']; });
