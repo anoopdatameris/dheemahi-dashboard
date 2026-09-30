@@ -733,7 +733,7 @@
     <header>
         <div>
             <h1>Dheemahi Ayur — Portfolio Dashboard</h1>
-            <span id="syncStatus" class="sync-badge">(Syncing sheets...)</span>
+            <span id="syncStatus" class="sync-badge">(Syncing sheet...)</span>
         </div>
         <button onclick="resetFilters()" style="padding: 8px 15px; background: #fff; border: 1px solid var(--border); border-radius: 4px; cursor: pointer; font-weight: 600; transition: background 0.2s;" onmouseover="this.style.background='#f1f5f9'" onmouseout="this.style.background='#fff'">Reset Filters</button>
     </header>
@@ -784,7 +784,7 @@
     <!-- Table Details Section -->
     <div class="panel" style="padding: 0; overflow: hidden; background: var(--card-bg); border: 1px solid var(--border);">
         <div style="padding: 15px 20px; border-bottom: 1px solid var(--border);">
-            <div class="section-header" id="tableSectionTitle" style="margin: 0; border: none; padding: 0;">Team Roll-up Summary (By Resource)</div>
+            <div class="section-header" id="tableSectionTitle" style="margin: 0; border: none; padding: 0;">Project Roll-up Summary</div>
         </div>
         <div class="table-responsive">
             <table>
@@ -806,10 +806,34 @@
 </div>
 
 <script>
-    const sheetsToFetch = [
-        { name: 'Anjana', sheetId: '1w5vywPUV-W-y1P3egSx6xgfHzxi5pjGxP_OyU8rNHJw', gid: '927371423' },
-        { name: 'Rumaisa', sheetId: '1thS7nWA0J-6CXKtONMpcusVoCqNof_spq_ZFocINXY4', gid: '927371423' }
+    // SINGLE COMBINED RESOURCE SHEET
+    // Replace PASTE_SINGLE_SHEET_ID_HERE with the Google Sheet ID of the
+    // one resource sheet that now contains BOTH Dheemahi projects.
+    const dataSource = {
+        name: 'Combined Resource',
+        sheetId: '1w5vywPUV-W-y1P3egSx6xgfHzxi5pjGxP_OyU8rNHJw',
+        gid: '927371423'
+    };
+
+    // These values must match the Project dropdown values in the Google Sheet.
+    const projects = [
+        'Dheemahi Kottayam',
+        'Dheemahi Kumarakom'
     ];
+
+    function normaliseProject(value) {
+        const p = String(value || '').trim();
+
+        // New short project names
+        if (p === 'Dheemahi Kottayam') return 'Dheemahi Kottayam';
+        if (p === 'Dheemahi Kumarakom') return 'Dheemahi Kumarakom';
+
+        // Compatibility with older rows during migration
+        if (p === 'Dheemahi Ayurvedic Centre, Kottayam') return 'Dheemahi Kottayam';
+        if (p === 'Dheemahi Ayurvedic Village, Kumarakom') return 'Dheemahi Kumarakom';
+
+        return p;
+    }
 
     let rawData = [];
     let completedFetches = 0;
@@ -848,24 +872,28 @@
     function loadGoogleSheetsJSONP() {
         rawData = [];
         completedFetches = 0;
-        document.getElementById('syncStatus').innerText = '(Syncing sheets...)';
+        document.getElementById('syncStatus').innerText = '(Syncing sheet...)';
         document.getElementById('syncStatus').style.color = '#3498db';
 
-        sheetsToFetch.forEach((sheet, index) => {
-            const callbackName = `gviz_callback_${index}_${Date.now()}`;
-            window[callbackName] = function(response) {
-                processSingleSheetResponse(response, sheet.name);
-                delete window[callbackName];
-            };
+        if (!dataSource.sheetId || false) {
+            document.getElementById('syncStatus').innerText = '⚠ Add combined Google Sheet ID in HTML';
+            document.getElementById('syncStatus').style.color = '#e67e22';
+            return;
+        }
 
-            const script = document.createElement('script');
-            script.src = `https://docs.google.com/spreadsheets/d/${sheet.sheetId}/gviz/tq?gid=${sheet.gid}&tqx=responseHandler:${callbackName}`;
-            script.onerror = function() {
-                completedFetches++;
-                checkAllComplete();
-            };
-            document.body.appendChild(script);
-        });
+        const callbackName = `gviz_callback_${Date.now()}`;
+        window[callbackName] = function(response) {
+            processSingleSheetResponse(response, dataSource.name);
+            delete window[callbackName];
+        };
+
+        const script = document.createElement('script');
+        script.src = `https://docs.google.com/spreadsheets/d/${dataSource.sheetId}/gviz/tq?gid=${dataSource.gid}&tqx=responseHandler:${callbackName}`;
+        script.onerror = function() {
+            completedFetches++;
+            checkAllComplete();
+        };
+        document.body.appendChild(script);
     }
 
     function processSingleSheetResponse(response, sourceName) {
@@ -958,7 +986,7 @@
                     DATE_STR: String(dateStr),
                     REPORTING_MONTH: String(monthVal),
                     TASK: task,
-                    PROJECT: c[colMap.project] && c[colMap.project].v ? String(c[colMap.project].v) : 'Dheemahi Ayur',
+                    PROJECT: normaliseProject(c[colMap.project] && c[colMap.project].v ? c[colMap.project].v : ''),
                     Category: categorize(task),
                     'ESTIMATED HOURS': estVal,
                     'ACTUAL HOURS': actVal,
@@ -971,8 +999,8 @@
     }
 
     function checkAllComplete() {
-        if (completedFetches >= sheetsToFetch.length) {
-            document.getElementById('syncStatus').innerText = `✓ Synced ${sheetsToFetch.length} Sheets`;
+        if (completedFetches >= 1) {
+            document.getElementById('syncStatus').innerText = '✓ Synced 1 Combined Sheet';
             document.getElementById('syncStatus').style.color = '#2ecc71';
             buildTabs();
             buildMonthFilter();
@@ -1113,8 +1141,9 @@
     function buildTabs() {
         const navContainer = document.getElementById('tabNavContainer');
         let html = `<button onclick="switchTab('SUMMARY')" id="tab_SUMMARY" class="tab-btn ${currentTab === 'SUMMARY' ? 'active' : ''}">📊 Combined Executive Dashboard</button>`;
-        sheetsToFetch.forEach(s => {
-            html += `<button onclick="switchTab('${s.name}')" id="tab_${s.name}" class="tab-btn ${currentTab === s.name ? 'active' : ''}">👤 ${s.name}</button>`;
+        projects.forEach(project => {
+            const safeId = project.replace(/[^A-Za-z0-9_-]/g, '_');
+            html += `<button onclick="switchTab('${project}')" id="tab_${safeId}" class="tab-btn ${currentTab === project ? 'active' : ''}">📁 ${project}</button>`;
         });
         navContainer.innerHTML = html;
     }
@@ -1122,7 +1151,7 @@
     function switchTab(tabName) {
         currentTab = tabName;
         document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
-        const activeBtn = document.getElementById(`tab_${tabName}`);
+        const activeBtn = document.getElementById(`tab_${String(tabName).replace(/[^A-Za-z0-9_-]/g, '_')}`);
         if (activeBtn) activeBtn.classList.add('active');
         render();
     }
@@ -1134,7 +1163,7 @@
         const searchVal = document.getElementById('searchInput').value.toLowerCase();
 
         const tabFiltered = rawData.filter(d => {
-            const matchTab = currentTab === 'SUMMARY' || d.SOURCE_SHEET === currentTab;
+            const matchTab = currentTab === 'SUMMARY' || d.PROJECT === currentTab;
             const matchMonth =
                 monthFilter === 'ALL' ||
                 reportingMonthKey(d.REPORTING_MONTH) === monthFilter;
@@ -1198,35 +1227,34 @@
         });
 
         let overloadedResourcesMap = {};
-        sheetsToFetch.forEach(s => {
-            let resData = tabFiltered.filter(d => d.SOURCE_SHEET === s.name);
-            let dateMap = {};
-            resData.forEach(d => { dateMap[d.DATE_STR] = (dateMap[d.DATE_STR] || 0) + d['ESTIMATED HOURS']; });
-            for (let dt in dateMap) {
-                if (dateMap[dt] > 7) {
-                    if (!overloadedResourcesMap[s.name]) overloadedResourcesMap[s.name] = [];
-                    overloadedResourcesMap[s.name].push(`${dt} (${dateMap[dt].toFixed(1)} hrs)`);
-                }
-            }
+        let resourceDateMap = {};
+        tabFiltered.forEach(d => {
+            resourceDateMap[d.DATE_STR] = (resourceDateMap[d.DATE_STR] || 0) + d['ESTIMATED HOURS'];
         });
+        for (let dt in resourceDateMap) {
+            if (resourceDateMap[dt] > 7) {
+                if (!overloadedResourcesMap[dataSource.name]) overloadedResourcesMap[dataSource.name] = [];
+                overloadedResourcesMap[dataSource.name].push(`${dt} (${resourceDateMap[dt].toFixed(1)} hrs)`);
+            }
+        }
 
-        let activeResourcesList = sheetsToFetch.map(s => s.name);
+        let activeResourcesList = tabFiltered.length ? [dataSource.name] : [];
         let overloadedNames = Object.keys(overloadedResourcesMap);
         let balancedNames = activeResourcesList.filter(name => !overloadedResourcesMap[name]);
 
         let projectProgressHTML = '';
-        sheetsToFetch.forEach(s => {
-            let resTasks = tabFiltered.filter(d => d.SOURCE_SHEET === s.name);
-            let resComp = resTasks.filter(d => d.STATUS === 'Completed').length;
-            let resPct = resTasks.length > 0 ? ((resComp / resTasks.length) * 100).toFixed(1) : 0;
+        projects.forEach(project => {
+            let projectTasks = tabFiltered.filter(d => d.PROJECT === project);
+            let projectComp = projectTasks.filter(d => d.STATUS === 'Completed').length;
+            let projectPct = projectTasks.length > 0 ? ((projectComp / projectTasks.length) * 100).toFixed(1) : 0;
             projectProgressHTML += `
                 <div style="margin-bottom: 8px;">
                     <div style="display: flex; justify-content: space-between; font-size: 12px; margin-bottom: 3px; font-weight: bold; color: #34495e;">
-                        <span>👤 ${s.name}</span>
-                        <span>${resPct}% (${resComp}/${resTasks.length} tasks)</span>
+                        <span>📁 ${project}</span>
+                        <span>${projectPct}% (${projectComp}/${projectTasks.length} tasks)</span>
                     </div>
                     <div style="background: #ecf0f1; border-radius: 4px; height: 14px; overflow: hidden;">
-                        <div style="background: var(--success); width: ${resPct}%; height: 100%; transition: width 0.5s ease;"></div>
+                        <div style="background: var(--success); width: ${projectPct}%; height: 100%; transition: width 0.5s ease;"></div>
                     </div>
                 </div>`;
         });
@@ -1256,16 +1284,16 @@
 
                 <!-- Drill-down Panels (Project Status) -->
                 <div id="drill_proj_progressGraph" class="drilldown-panel">
-                    <div style="font-weight: bold; color: var(--primary); margin-bottom: 10px;">📊 Project Progress Breakdown (By Resource):</div>
+                    <div style="font-weight: bold; color: var(--primary); margin-bottom: 10px;">📊 Project Progress Breakdown:</div>
                     ${projectProgressHTML}
                 </div>
                 <div id="drill_proj_overdue" class="drilldown-panel">
                     <div style="font-weight: bold; color: var(--danger); margin-bottom: 8px;">⚠️ Detailed List of Overdue Tasks (Project Basis):</div>
-                    ${overdueTasksList.length > 0 ? overdueTasksList.map(t => `<div style="padding: 6px 0; border-bottom: 1px solid var(--border); font-size: 13px;"><b>[${t.SOURCE_SHEET}]</b> ${t.TASK} — Due: ${t.DATE_STR}</div>`).join('') : '<div style="font-size:13px; color:#555;">No overdue tasks found.</div>'}
+                    ${overdueTasksList.length > 0 ? overdueTasksList.map(t => `<div style="padding: 6px 0; border-bottom: 1px solid var(--border); font-size: 13px;"><b>[${t.PROJECT}]</b> ${t.TASK} — Due: ${t.DATE_STR}</div>`).join('') : '<div style="font-size:13px; color:#555;">No overdue tasks found.</div>'}
                 </div>
                 <div id="drill_proj_dueWeek" class="drilldown-panel">
                     <div style="font-weight: bold; color: var(--accent); margin-bottom: 8px;">📅 Tasks Due This Week:</div>
-                    ${dueThisWeekList.length > 0 ? dueThisWeekList.map(t => `<div style="padding: 6px 0; border-bottom: 1px solid var(--border); font-size: 13px;"><b>[${t.SOURCE_SHEET}]</b> ${t.TASK} — Due: ${t.DATE_STR} (${t['ESTIMATED HOURS']} hrs)</div>`).join('') : '<div style="font-size:13px; color:#555;">No tasks due this week.</div>'}
+                    ${dueThisWeekList.length > 0 ? dueThisWeekList.map(t => `<div style="padding: 6px 0; border-bottom: 1px solid var(--border); font-size: 13px;"><b>[${t.PROJECT}]</b> ${t.TASK} — Due: ${t.DATE_STR} (${t['ESTIMATED HOURS']} hrs)</div>`).join('') : '<div style="font-size:13px; color:#555;">No tasks due this week.</div>'}
                 </div>
             </div>
 
@@ -1310,13 +1338,13 @@
                 </div>
                 <div id="drill_res_remainingCap" class="drilldown-panel">
                     <div style="font-weight: bold; color: var(--accent); margin-bottom: 8px;">⏳ Remaining Capacity Breakdown by Resource:</div>
-                    ${sheetsToFetch.map(s => {
-                        let resTasks = tabFiltered.filter(d => d.SOURCE_SHEET === s.name);
+                    ${(() => {
+                        let resTasks = tabFiltered;
                         let resHrs = resTasks.reduce((sum, d) => sum + d['ESTIMATED HOURS'], 0);
                         let resCompHrs = resTasks.filter(d => d.STATUS === 'Completed').reduce((sum, d) => sum + d['ESTIMATED HOURS'], 0);
                         let resRem = resHrs - resCompHrs;
-                        return `<div style="padding: 8px 0; border-bottom: 1px solid var(--border); font-size: 13px;">• <b>${s.name}</b>: <b>${resRem.toFixed(1)} hrs remaining</b> (Completed: ${resCompHrs.toFixed(1)} hrs / Total: ${resHrs.toFixed(1)} hrs)</div>`;
-                    }).join('')}
+                        return `<div style="padding: 8px 0; border-bottom: 1px solid var(--border); font-size: 13px;">• <b>${dataSource.name}</b>: <b>${resRem.toFixed(1)} hrs remaining</b> (Completed: ${resCompHrs.toFixed(1)} hrs / Total: ${resHrs.toFixed(1)} hrs)</div>`;
+                    })()}
                 </div>
                 <div id="drill_res_overloadedRes" class="drilldown-panel">
                     <div style="font-weight: bold; color: var(--warning); margin-bottom: 8px;">⚠️ Overloaded Resources List (>7 hrs/day):</div>
@@ -1366,7 +1394,7 @@
         let upcomingTasks = tabFiltered.filter(d => d.STATUS !== 'Completed').slice(0, 3);
         let milestoneHTML = '<div style="font-weight: bold; margin-bottom: 5px;">Upcoming Milestone Tasks:</div>';
         upcomingTasks.forEach(t => {
-            milestoneHTML += `<div style="background: #fff; padding: 8px; border: 1px solid var(--border); border-radius: 4px;">• <b>${t.TASK}</b> (${t.SOURCE_SHEET}) — Due: ${t.DATE_STR}</div>`;
+            milestoneHTML += `<div style="background: #fff; padding: 8px; border: 1px solid var(--border); border-radius: 4px;">• <b>${t.TASK}</b> (${t.PROJECT}) — Due: ${t.DATE_STR}</div>`;
         });
         document.getElementById('combinedMilestonesContainer').innerHTML = milestoneHTML || '<div>No upcoming milestones pending</div>';
 
@@ -1377,7 +1405,7 @@
         }, 50);
 
         document.getElementById('tableHeaderRow').innerHTML = `
-            <th>Resource Name</th>
+            <th>Project</th>
             <th>Total Tasks</th>
             <th>Completed Tasks</th>
             <th>Total Workload</th>
@@ -1385,17 +1413,17 @@
         `;
 
         let summaryTableHTML = '';
-        sheetsToFetch.forEach(s => {
-            let resTasks = tabFiltered.filter(d => d.SOURCE_SHEET === s.name);
-            let resComp = resTasks.filter(d => d.STATUS === 'Completed').length;
-            let resHrs = resTasks.reduce((sum, d) => sum + d['ESTIMATED HOURS'], 0);
+        projects.forEach(project => {
+            let projectTasks = tabFiltered.filter(d => d.PROJECT === project);
+            let projectComp = projectTasks.filter(d => d.STATUS === 'Completed').length;
+            let projectHrs = projectTasks.reduce((sum, d) => sum + d['ESTIMATED HOURS'], 0);
             summaryTableHTML += `
                 <tr>
-                    <td style="font-weight: 600;">👤 ${s.name}</td>
-                    <td>${resTasks.length}</td>
-                    <td>${resComp}</td>
-                    <td>${resHrs.toFixed(1)} hrs</td>
-                    <td><button onclick="switchTab('${s.name}')" style="padding: 4px 10px; background: var(--accent); color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 12px;">View Schedule</button></td>
+                    <td style="font-weight: 600;">📁 ${project}</td>
+                    <td>${projectTasks.length}</td>
+                    <td>${projectComp}</td>
+                    <td>${projectHrs.toFixed(1)} hrs</td>
+                    <td><button onclick="switchTab('${project}')" style="padding: 4px 10px; background: var(--accent); color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 12px;">View Schedule</button></td>
                 </tr>`;
         });
         document.getElementById('tableBody').innerHTML = summaryTableHTML;
@@ -1412,7 +1440,7 @@
         let resDateMap = {};
         const selectedMonth = document.getElementById('monthFilter').value;
         let allResTasks = rawData.filter(d =>
-            d.SOURCE_SHEET === currentTab &&
+            d.PROJECT === currentTab &&
             (
                 selectedMonth === 'ALL' ||
                 reportingMonthKey(d.REPORTING_MONTH) === selectedMonth
