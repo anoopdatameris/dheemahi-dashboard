@@ -823,9 +823,11 @@
         }
     ];
 
+    // Dashboard roll-up projects.
+    // Both Dheemahi sheet project values are combined into one dashboard tab.
+    // Both Matha sheet project values are combined into one dashboard tab.
     const projects = [
-        'Dheemahi Kottayam',
-        'Dheemahi Kumarakom',
+        'Dheemahi',
         'Matha'
     ];
 
@@ -833,15 +835,20 @@
         const raw = String(value || '').trim();
         const p = raw.toLowerCase();
 
-        if (p === 'dheemahi kottayam') return 'Dheemahi Kottayam';
-        if (p === 'dheemahi kumarakom') return 'Dheemahi Kumarakom';
+        // Roll up BOTH Dheemahi properties into one dashboard project.
+        if (
+            p === 'dheemahi kottayam' ||
+            p === 'dheemahi kumarakom' ||
+            p === 'dheemahi ayurvedic centre, kottayam' ||
+            p === 'dheemahi ayurvedic village, kumarakom'
+        ) {
+            return 'Dheemahi';
+        }
 
-        // Compatibility with older Dheemahi rows during migration
-        if (p === 'dheemahi ayurvedic centre, kottayam') return 'Dheemahi Kottayam';
-        if (p === 'dheemahi ayurvedic village, kumarakom') return 'Dheemahi Kumarakom';
-
-        // Both Matha properties roll up into one project in the dashboard.
-        if (p === 'mathaonline' || p === 'matha.com') return 'Matha';
+        // Roll up BOTH Matha properties into one dashboard project.
+        if (p === 'mathaonline' || p === 'matha.com' || p === 'matha') {
+            return 'Matha';
+        }
 
         return raw;
     }
