@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Dheemahi Ayur — Portfolio Dashboard</title>
+    <title>Project Portfolio Dashboard</title>
     <style>
         :root {
             --primary: #2c3e50;
@@ -732,7 +732,7 @@
 <div class="container">
     <header>
         <div>
-            <h1>Dheemahi Ayur — Portfolio Dashboard</h1>
+            <h1>Project Portfolio Dashboard</h1>
             <span id="syncStatus" class="sync-badge">(Syncing sheet...)</span>
         </div>
         <button onclick="resetFilters()" style="padding: 8px 15px; background: #fff; border: 1px solid var(--border); border-radius: 4px; cursor: pointer; font-weight: 600; transition: background 0.2s;" onmouseover="this.style.background='#f1f5f9'" onmouseout="this.style.background='#fff'">Reset Filters</button>
@@ -806,37 +806,50 @@
 </div>
 
 <script>
-    // SINGLE COMBINED RESOURCE SHEET
-    // Replace PASTE_SINGLE_SHEET_ID_HERE with the Google Sheet ID of the
-    // one resource sheet that now contains BOTH Dheemahi projects.
-    const dataSource = {
-        name: 'Combined Resource',
-        sheetId: '1w5vywPUV-W-y1P3egSx6xgfHzxi5pjGxP_OyU8rNHJw',
-        gid: '927371423'
-    };
+    // RESOURCE SHEETS
+    // Dheemahi has one combined sheet for Kottayam + Kumarakom.
+    // Matha has a separate sheet, but mathaonline + matha.com are merged
+    // into one dashboard project named "Matha".
+    const dataSources = [
+        {
+            name: 'Dheemahi Resource',
+            sheetId: '1w5vywPUV-W-y1P3egSx6xgfHzxi5pjGxP_OyU8rNHJw',
+            gid: '927371423'
+        },
+        {
+            name: 'Matha Resource',
+            sheetId: '19eMvNJqt7F2x6tAf-ayuAyFQjTRnVWUh7UJMr6UzTIY',
+            gid: '927371423'
+        }
+    ];
 
-    // These values must match the Project dropdown values in the Google Sheet.
     const projects = [
         'Dheemahi Kottayam',
-        'Dheemahi Kumarakom'
+        'Dheemahi Kumarakom',
+        'Matha'
     ];
 
     function normaliseProject(value) {
-        const p = String(value || '').trim();
+        const raw = String(value || '').trim();
+        const p = raw.toLowerCase();
 
-        // New short project names
-        if (p === 'Dheemahi Kottayam') return 'Dheemahi Kottayam';
-        if (p === 'Dheemahi Kumarakom') return 'Dheemahi Kumarakom';
+        if (p === 'dheemahi kottayam') return 'Dheemahi Kottayam';
+        if (p === 'dheemahi kumarakom') return 'Dheemahi Kumarakom';
 
-        // Compatibility with older rows during migration
-        if (p === 'Dheemahi Ayurvedic Centre, Kottayam') return 'Dheemahi Kottayam';
-        if (p === 'Dheemahi Ayurvedic Village, Kumarakom') return 'Dheemahi Kumarakom';
+        // Compatibility with older Dheemahi rows during migration
+        if (p === 'dheemahi ayurvedic centre, kottayam') return 'Dheemahi Kottayam';
+        if (p === 'dheemahi ayurvedic village, kumarakom') return 'Dheemahi Kumarakom';
 
-        return p;
+        // Both Matha properties roll up into one project in the dashboard.
+        if (p === 'mathaonline' || p === 'matha.com') return 'Matha';
+
+        return raw;
     }
 
     let rawData = [];
     let completedFetches = 0;
+    let successfulFetches = 0;
+    let failedFetches = 0;
     let currentTab = 'SUMMARY';
 
     function categorize(task) {
@@ -872,140 +885,192 @@
     function loadGoogleSheetsJSONP() {
         rawData = [];
         completedFetches = 0;
-        document.getElementById('syncStatus').innerText = '(Syncing sheet...)';
+        successfulFetches = 0;
+        failedFetches = 0;
+
+        document.getElementById('syncStatus').innerText = '(Syncing sheets...)';
         document.getElementById('syncStatus').style.color = '#3498db';
 
-        if (!dataSource.sheetId || false) {
-            document.getElementById('syncStatus').innerText = '⚠ Add combined Google Sheet ID in HTML';
+        const validSources = dataSources.filter(source => source.sheetId && source.gid);
+
+        if (!validSources.length) {
+            document.getElementById('syncStatus').innerText = '⚠ Add Google Sheet IDs in HTML';
             document.getElementById('syncStatus').style.color = '#e67e22';
             return;
         }
 
-        const callbackName = `gviz_callback_${Date.now()}`;
-        window[callbackName] = function(response) {
-            processSingleSheetResponse(response, dataSource.name);
-            delete window[callbackName];
-        };
+        validSources.forEach((source, index) => {
+            const callbackName = `gviz_callback_${Date.now()}_${index}`;
+            const script = document.createElement('script');
+            let settled = false;
 
-        const script = document.createElement('script');
-        script.src = `https://docs.google.com/spreadsheets/d/${dataSource.sheetId}/gviz/tq?gid=${dataSource.gid}&tqx=responseHandler:${callbackName}`;
-        script.onerror = function() {
-            completedFetches++;
-            checkAllComplete();
-        };
-        document.body.appendChild(script);
-    }
+            const finish = (ok, response) => {
+                if (settled) return;
+                settled = true;
+                clearTimeout(timer);
 
-    function processSingleSheetResponse(response, sourceName) {
-        if (response && response.status !== 'error' && response.table) {
-            const table = response.table;
-            const rows = table.rows;
-            let colMap = { date: 0, month: 1, task: 2, project: 3, est: 4, act: 5, status: 9 };
-
-            table.cols.forEach((col, idx) => {
-                let label = (col.label || '').toUpperCase();
-                if (label === 'DATE' || (label.includes('DATE') && !label.includes('UPDATED'))) colMap.date = idx;
-                if (label.includes('REPORTING MONTH')) colMap.month = idx;
-                if (label.includes('TASK')) colMap.task = idx;
-                if (label.includes('PROJECT')) colMap.project = idx;
-                if (label.includes('ESTIMATED')) colMap.est = idx;
-                if (label.includes('ACTUAL')) colMap.act = idx;
-                if (label.includes('STATUS')) colMap.status = idx;
-            });
-
-            rows.forEach(r => {
-                let c = r.c;
-                if (!c) return;
-
-                let task = (c[colMap.task] && c[colMap.task].v) ? String(c[colMap.task].v) : '';
-                if (!task || task.toLowerCase() === 'sunday') return;
-
-                let dateStr = '';
-                if (c[colMap.date]) {
-                    dateStr = c[colMap.date].f || c[colMap.date].v || '';
-                    if (String(dateStr).includes('Date(')) {
-                        let parts = String(dateStr).match(/\d+/g);
-                        if (parts && parts.length >= 3) {
-                            let months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-                            let d = String(parts[2]).padStart(2, '0');
-                            let m = months[parseInt(parts[1])];
-                            let y = parts[0];
-                            dateStr = `${d}-${m}-${y}`;
-                        }
-                    }
+                if (ok && response && response.status !== 'error' && response.table) {
+                    processSheetResponse(response, source.name);
+                    successfulFetches++;
+                } else {
+                    failedFetches++;
                 }
 
-                let monthVal = '';
-                if (c[colMap.month]) {
-                    monthVal = c[colMap.month].f || c[colMap.month].v || '';
+                completedFetches++;
 
-                    const monthNames = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+                try {
+                    delete window[callbackName];
+                } catch (e) {
+                    window[callbackName] = undefined;
+                }
 
-                    if (String(monthVal).includes('Date(')) {
-                        let parts = String(monthVal).match(/\d+/g);
-                        if (parts && parts.length >= 2) {
-                            monthVal = `${monthNames[parseInt(parts[1], 10)]} ${parts[0]}`;
+                if (script.parentNode) {
+                    script.parentNode.removeChild(script);
+                }
+
+                checkAllComplete(validSources.length);
+            };
+
+            window[callbackName] = function(response) {
+                finish(true, response);
+            };
+
+            script.src =
+                `https://docs.google.com/spreadsheets/d/${source.sheetId}/gviz/tq?gid=${source.gid}&tqx=responseHandler:${callbackName}`;
+
+            script.onerror = function() {
+                finish(false, null);
+            };
+
+            const timer = setTimeout(() => {
+                finish(false, null);
+            }, 12000);
+
+            document.body.appendChild(script);
+        });
+    }
+
+    function processSheetResponse(response, sourceName) {
+        if (!(response && response.status !== 'error' && response.table)) {
+            return;
+        }
+
+        const table = response.table;
+        const rows = table.rows || [];
+        let colMap = { date: 0, month: 1, task: 2, project: 3, est: 4, act: 5, status: 9 };
+
+        table.cols.forEach((col, idx) => {
+            let label = (col.label || '').toUpperCase();
+            if (label === 'DATE' || (label.includes('DATE') && !label.includes('UPDATED'))) colMap.date = idx;
+            if (label.includes('REPORTING MONTH')) colMap.month = idx;
+            if (label.includes('TASK')) colMap.task = idx;
+            if (label.includes('PROJECT')) colMap.project = idx;
+            if (label.includes('ESTIMATED')) colMap.est = idx;
+            if (label.includes('ACTUAL')) colMap.act = idx;
+            if (label.includes('STATUS')) colMap.status = idx;
+        });
+
+        rows.forEach(r => {
+            let c = r.c;
+            if (!c) return;
+
+            let task = (c[colMap.task] && c[colMap.task].v) ? String(c[colMap.task].v) : '';
+            if (!task || task.toLowerCase() === 'sunday') return;
+
+            let dateStr = '';
+            if (c[colMap.date]) {
+                dateStr = c[colMap.date].f || c[colMap.date].v || '';
+                if (String(dateStr).includes('Date(')) {
+                    let parts = String(dateStr).match(/\d+/g);
+                    if (parts && parts.length >= 3) {
+                        let months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+                        let d = String(parts[2]).padStart(2, '0');
+                        let m = months[parseInt(parts[1])];
+                        let y = parts[0];
+                        dateStr = `${d}-${m}-${y}`;
+                    }
+                }
+            }
+
+            let monthVal = '';
+            if (c[colMap.month]) {
+                monthVal = c[colMap.month].f || c[colMap.month].v || '';
+
+                const monthNames = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+
+                if (String(monthVal).includes('Date(')) {
+                    let parts = String(monthVal).match(/\d+/g);
+                    if (parts && parts.length >= 2) {
+                        monthVal = `${monthNames[parseInt(parts[1], 10)]} ${parts[0]}`;
+                    }
+                } else {
+                    const text = String(monthVal).trim();
+
+                    // Full named date: 1-Sep-2026 / 01-Sep-2026 / 1 Sep 2026
+                    let m = text.match(/^(\d{1,2})[\s\/-]+([A-Za-z]{3,9})[\s\/-]+(20\d{2})$/);
+
+                    if (m) {
+                        const key = m[2].slice(0,3).toLowerCase();
+                        const map = {
+                            jan:'Jan', feb:'Feb', mar:'Mar', apr:'Apr',
+                            may:'May', jun:'Jun', jul:'Jul', aug:'Aug',
+                            sep:'Sep', oct:'Oct', nov:'Nov', dec:'Dec'
+                        };
+
+                        if (map[key]) {
+                            monthVal = `${map[key]} ${m[3]}`;
                         }
                     } else {
-                        const text = String(monthVal).trim();
-
-                        // Full named date: 1-Sep-2026 / 01-Sep-2026 / 1 Sep 2026
-                        let m = text.match(/^(\d{1,2})[\s\/-]+([A-Za-z]{3,9})[\s\/-]+(20\d{2})$/);
+                        // Numeric full date: 01/09/2026 or 01-09-2026
+                        m = text.match(/^(\d{1,2})[\/-](\d{1,2})[\/-](20\d{2})$/);
 
                         if (m) {
-                            const key = m[2].slice(0,3).toLowerCase();
-                            const map = {
-                                jan:'Jan', feb:'Feb', mar:'Mar', apr:'Apr',
-                                may:'May', jun:'Jun', jul:'Jul', aug:'Aug',
-                                sep:'Sep', oct:'Oct', nov:'Nov', dec:'Dec'
-                            };
-
-                            if (map[key]) {
-                                monthVal = `${map[key]} ${m[3]}`;
-                            }
-                        } else {
-                            // Numeric full date: 01/09/2026 or 01-09-2026
-                            m = text.match(/^(\d{1,2})[\/-](\d{1,2})[\/-](20\d{2})$/);
-
-                            if (m) {
-                                const monthNumber = Number(m[2]);
-                                if (monthNumber >= 1 && monthNumber <= 12) {
-                                    monthVal = `${monthNames[monthNumber - 1]} ${m[3]}`;
-                                }
+                            const monthNumber = Number(m[2]);
+                            if (monthNumber >= 1 && monthNumber <= 12) {
+                                monthVal = `${monthNames[monthNumber - 1]} ${m[3]}`;
                             }
                         }
                     }
                 }
+            }
 
-                let estVal = c[colMap.est] ? parseFloat(c[colMap.est].v) || 0 : 0;
-                let actVal = c[colMap.act] ? parseFloat(c[colMap.act].v) || 0 : 0;
-                let statusVal = c[colMap.status] && c[colMap.status].v ? String(c[colMap.status].v) : 'Not Started';
+            let estVal = c[colMap.est] ? parseFloat(c[colMap.est].v) || 0 : 0;
+            let actVal = c[colMap.act] ? parseFloat(c[colMap.act].v) || 0 : 0;
+            let statusVal = c[colMap.status] && c[colMap.status].v ? String(c[colMap.status].v) : 'Not Started';
 
-                rawData.push({
-                    SOURCE_SHEET: sourceName,
-                    DATE_STR: String(dateStr),
-                    REPORTING_MONTH: String(monthVal),
-                    TASK: task,
-                    PROJECT: normaliseProject(c[colMap.project] && c[colMap.project].v ? c[colMap.project].v : ''),
-                    Category: categorize(task),
-                    'ESTIMATED HOURS': estVal,
-                    'ACTUAL HOURS': actVal,
-                    STATUS: statusVal
-                });
+            rawData.push({
+                SOURCE_SHEET: sourceName,
+                DATE_STR: String(dateStr),
+                REPORTING_MONTH: String(monthVal),
+                TASK: task,
+                PROJECT: normaliseProject(c[colMap.project] && c[colMap.project].v ? c[colMap.project].v : ''),
+                Category: categorize(task),
+                'ESTIMATED HOURS': estVal,
+                'ACTUAL HOURS': actVal,
+                STATUS: statusVal
             });
-        }
-        completedFetches++;
-        checkAllComplete();
+        });
     }
 
-    function checkAllComplete() {
-        if (completedFetches >= 1) {
-            document.getElementById('syncStatus').innerText = '✓ Synced 1 Combined Sheet';
-            document.getElementById('syncStatus').style.color = '#2ecc71';
-            buildTabs();
-            buildMonthFilter();
-            render();
+    function checkAllComplete(totalSources) {
+        if (completedFetches < totalSources) return;
+
+        const syncStatus = document.getElementById('syncStatus');
+
+        if (successfulFetches === totalSources) {
+            syncStatus.innerText = `✓ Synced ${successfulFetches} Sheets`;
+            syncStatus.style.color = '#2ecc71';
+        } else if (successfulFetches > 0) {
+            syncStatus.innerText = `⚠ Synced ${successfulFetches} of ${totalSources} Sheets`;
+            syncStatus.style.color = '#e67e22';
+        } else {
+            syncStatus.innerText = '✕ Unable to load Google Sheets';
+            syncStatus.style.color = '#e74c3c';
         }
+
+        buildTabs();
+        buildMonthFilter();
+        render();
     }
 
     function reportingMonthKey(value) {
@@ -1228,17 +1293,43 @@
 
         let overloadedResourcesMap = {};
         let resourceDateMap = {};
-        tabFiltered.forEach(d => {
-            resourceDateMap[d.DATE_STR] = (resourceDateMap[d.DATE_STR] || 0) + d['ESTIMATED HOURS'];
-        });
-        for (let dt in resourceDateMap) {
-            if (resourceDateMap[dt] > 7) {
-                if (!overloadedResourcesMap[dataSource.name]) overloadedResourcesMap[dataSource.name] = [];
-                overloadedResourcesMap[dataSource.name].push(`${dt} (${resourceDateMap[dt].toFixed(1)} hrs)`);
-            }
-        }
 
-        let activeResourcesList = tabFiltered.length ? [dataSource.name] : [];
+        tabFiltered.forEach(d => {
+            const resourceName = d.SOURCE_SHEET || 'Unknown Resource';
+
+            if (!resourceDateMap[resourceName]) {
+                resourceDateMap[resourceName] = {};
+            }
+
+            resourceDateMap[resourceName][d.DATE_STR] =
+                (resourceDateMap[resourceName][d.DATE_STR] || 0) +
+                d['ESTIMATED HOURS'];
+        });
+
+        Object.keys(resourceDateMap).forEach(resourceName => {
+            Object.keys(resourceDateMap[resourceName]).forEach(dt => {
+                const hrs = resourceDateMap[resourceName][dt];
+
+                if (hrs > 7) {
+                    if (!overloadedResourcesMap[resourceName]) {
+                        overloadedResourcesMap[resourceName] = [];
+                    }
+
+                    overloadedResourcesMap[resourceName].push(
+                        `${dt} (${hrs.toFixed(1)} hrs)`
+                    );
+                }
+            });
+        });
+
+        let activeResourcesList = [
+            ...new Set(
+                tabFiltered
+                    .map(d => d.SOURCE_SHEET)
+                    .filter(Boolean)
+            )
+        ];
+
         let overloadedNames = Object.keys(overloadedResourcesMap);
         let balancedNames = activeResourcesList.filter(name => !overloadedResourcesMap[name]);
 
@@ -1338,13 +1429,16 @@
                 </div>
                 <div id="drill_res_remainingCap" class="drilldown-panel">
                     <div style="font-weight: bold; color: var(--accent); margin-bottom: 8px;">⏳ Remaining Capacity Breakdown by Resource:</div>
-                    ${(() => {
-                        let resTasks = tabFiltered;
+                    ${activeResourcesList.map(resourceName => {
+                        let resTasks = tabFiltered.filter(d => d.SOURCE_SHEET === resourceName);
                         let resHrs = resTasks.reduce((sum, d) => sum + d['ESTIMATED HOURS'], 0);
-                        let resCompHrs = resTasks.filter(d => d.STATUS === 'Completed').reduce((sum, d) => sum + d['ESTIMATED HOURS'], 0);
+                        let resCompHrs = resTasks
+                            .filter(d => d.STATUS === 'Completed')
+                            .reduce((sum, d) => sum + d['ESTIMATED HOURS'], 0);
                         let resRem = resHrs - resCompHrs;
-                        return `<div style="padding: 8px 0; border-bottom: 1px solid var(--border); font-size: 13px;">• <b>${dataSource.name}</b>: <b>${resRem.toFixed(1)} hrs remaining</b> (Completed: ${resCompHrs.toFixed(1)} hrs / Total: ${resHrs.toFixed(1)} hrs)</div>`;
-                    })()}
+
+                        return `<div style="padding: 8px 0; border-bottom: 1px solid var(--border); font-size: 13px;">• <b>${resourceName}</b>: <b>${resRem.toFixed(1)} hrs remaining</b> (Completed: ${resCompHrs.toFixed(1)} hrs / Total: ${resHrs.toFixed(1)} hrs)</div>`;
+                    }).join('')}
                 </div>
                 <div id="drill_res_overloadedRes" class="drilldown-panel">
                     <div style="font-weight: bold; color: var(--warning); margin-bottom: 8px;">⚠️ Overloaded Resources List (>7 hrs/day):</div>
