@@ -1318,7 +1318,7 @@
             Object.keys(resourceDateMap[resourceName]).forEach(dt => {
                 const hrs = resourceDateMap[resourceName][dt];
 
-                if (hrs > 7) {
+                if (hrs > 8) {
                     if (!overloadedResourcesMap[resourceName]) {
                         overloadedResourcesMap[resourceName] = [];
                     }
@@ -1449,8 +1449,8 @@
                     }).join('')}
                 </div>
                 <div id="drill_res_overloadedRes" class="drilldown-panel">
-                    <div style="font-weight: bold; color: var(--warning); margin-bottom: 8px;">⚠️ Overloaded Resources List (>7 hrs/day):</div>
-                    ${overloadedNames.length > 0 ? overloadedNames.map(name => `<div style="padding: 6px 0; border-bottom: 1px solid var(--border); font-size: 13px;">• <b>${name}</b> overloaded on: ${overloadedResourcesMap[name].join(', ')}</div>`).join('') : '<div style="font-size:13px; color:#555;">No overloaded resources. All daily workloads are ≤ 7 hours.</div>'}
+                    <div style="font-weight: bold; color: var(--warning); margin-bottom: 8px;">⚠️ Overloaded Resources List (>8 hrs/day):</div>
+                    ${overloadedNames.length > 0 ? overloadedNames.map(name => `<div style="padding: 6px 0; border-bottom: 1px solid var(--border); font-size: 13px;">• <b>${name}</b> overloaded on: ${overloadedResourcesMap[name].join(', ')}</div>`).join('') : '<div style="font-size:13px; color:#555;">No overloaded resources. All daily workloads are ≤ 8 hours.</div>'}
                 </div>
             </div>
 
@@ -1552,7 +1552,7 @@
         
         let overloadedDates = new Set();
         for (let dt in resDateMap) {
-            if (resDateMap[dt] > 7) overloadedDates.add(dt);
+            if (resDateMap[dt] > 8) overloadedDates.add(dt);
         }
 
         let today = new Date();
@@ -1608,7 +1608,7 @@
                         <div style="font-size: 12px; color: #555;">Pending effort hours</div>
                     </div>
                     <div class="metric-card ${overloadedDates.size > 0 ? 'warning' : 'success'}" onclick="toggleExclusiveDrilldown('ind_res', 'drill_ind_overload')">
-                        <div style="font-size: 11px; font-weight: bold; color: #7f8c8d; text-transform: uppercase;">Overloaded Days (>7 hrs) 🔍</div>
+                        <div style="font-size: 11px; font-weight: bold; color: #7f8c8d; text-transform: uppercase;">Overloaded Days (>8 hrs) 🔍</div>
                         <div style="font-size: 24px; font-weight: bold; color: var(--primary); margin: 4px 0;">${overloadedDates.size} Day(s)</div>
                         <div style="font-size: 12px; color: #555;">Click to view overloaded days</div>
                     </div>
@@ -1616,7 +1616,7 @@
 
                 <div id="drill_ind_overload" class="drilldown-panel">
                     <div style="font-weight: bold; color: var(--warning); margin-bottom: 8px;">⚠️ Overloaded Dates for ${currentTab}:</div>
-                    ${overloadedDates.size > 0 ? Array.from(overloadedDates).map(dt => `<div style="padding: 6px 0; border-bottom: 1px solid var(--border); font-size: 13px;">• Date: ${dt} (Total > 7 hrs)</div>`).join('') : '<div style="font-size:13px; color:#555;">No overloaded days. All workloads are ≤ 7 hours.</div>'}
+                    ${overloadedDates.size > 0 ? Array.from(overloadedDates).map(dt => `<div style="padding: 6px 0; border-bottom: 1px solid var(--border); font-size: 13px;">• Date: ${dt} (Total > 8 hrs)</div>`).join('') : '<div style="font-size:13px; color:#555;">No overloaded days. All workloads are ≤ 8 hours.</div>'}
                 </div>
             </div>
 
@@ -1709,7 +1709,7 @@
                 }
             }
 
-            let isOverload = d['ESTIMATED HOURS'] > 7 && d['ACTUAL HOURS'] > 7;
+            let isOverload = d['ESTIMATED HOURS'] > 8 && d['ACTUAL HOURS'] > 8;
 
             if (isOverdue) {
                 rowClass = 'row-overdue';
